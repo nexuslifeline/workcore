@@ -1,0 +1,52 @@
+name: Telegram Commit Notification
+
+# Disabled. This workflow does not run on push.
+on:
+  workflow_dispatch:
+
+jobs:
+  notify:
+    if: false
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get commit info
+        run: |
+          echo "COMMIT_AUTHOR=$(git log -1 --pretty=format:%an)" >> $GITHUB_ENV
+          echo "COMMIT_URL=$(git log -1 --pretty=format:%H)" >> $GITHUB_ENV
+          echo "COMMIT_TITLE=$(git log -1 --pretty=format:%s)" >> $GITHUB_ENV
+          {
+            echo 'COMMIT_BODY<<EOF'
+            git log -1 --pretty=format:%b
+            echo 'EOF'
+          } >> $GITHUB_ENV
+
+      - name: Send Telegram message
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+          REPO: ${{ github.repository }}
+        run: |
+          MESSAGE=$(cat <<EOF
+          *New Commit Pushed*
+
+          *Author:*
+          $COMMIT_AUTHOR
+
+          *Title:*
+          $COMMIT_TITLE
+
+          *Description:*
+          $COMMIT_BODY
+
+          [View Commit](https://github.com/$REPO/commit/$COMMIT_URL)
+          EOF
+          )
+
+          curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT" \
+            -d parse_mode="Markdown" \
+            --data-urlencode text="$MESSAGE"

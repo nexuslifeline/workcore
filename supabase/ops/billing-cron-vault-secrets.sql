@@ -1,0 +1,70 @@
+-- One-time ops: create Vault secrets for app cron → API jobs.
+-- Do NOT commit real values. Run in the Supabase SQL editor per environment.
+--
+-- Required names (must match app_cron_http_post + cron migrations):
+--   app_base_url
+--   app_cron_secret
+--
+-- Related migrations:
+--   20260905150000_create_app_cron_http_post.sql
+--   20260905151000_subscriptions_apply_pending_plan_changes_cron.sql
+--   20260905152000_billing_invoices_create_due_period_cron.sql
+--   20260905153000_billing_invoices_mark_past_due_cron.sql  (in-DB; no HTTP)
+--   20260905160000_create_notification_outbox.sql
+--   20260905161000_notification_outbox_drain_cron.sql
+--   20260905162000_notification_outbox_drain_cron_disable.sql  (starts inactive)
+--   20260905170000_create_app_notifications.sql
+--   20260905171000_app_notifications_notify_billing_users.sql
+--   20260905172000…176000 billing notify triggers
+--   20260905177000_billing_payments_status_change.sql
+--   20260905178000_add_settings_billing_permission.sql  (catalog only; no role backfill)
+--   20260905180000_billing_invoices_after_status_change.sql
+--   20260905185000_subscription_grace_expiry.sql  (in-DB; past_due grace → Free)
+--   20260909120000_subscriptions_apply_beta_trial_expiry.sql  (in-DB; Beta trial → Free)
+--   20260909130000_subscriptions_free_usage_periods.sql  (in-DB; Free usage windows + REPLACE entry paths)
+--   20260913110000_auth_users_welcome_email.sql  (HTTP on confirm; same Vault secrets)
+--   20260913120000_billing_payments_outcome_email.sql  (HTTP send-payment-approved-email / send-payment-rejected-email)
+--   20260913130000_billing_invoices_issued_email.sql  (HTTP send-invoice-issued-email)
+--   20260913140000_billing_invoices_past_due_email.sql  (HTTP send-invoice-past-due-email)
+--   20260913160000_create_billing_policy.sql  (invoice due days + grace days; SQL helpers)
+--   20260913170000_subscriptions_grace_expired_email.sql  (HTTP send-grace-expired-email; split grace-expiry cases)
+--
+-- Re-enable outbox drain when ready (or toggle Active in Dashboard → Cron):
+--   SELECT cron.alter_job(jobid, active := true)
+--   FROM cron.job
+--   WHERE jobname = 'notification_outbox_drain';
+--
+-- app_cron_secret must equal the Next.js CRON_SECRET env var.
+
+-- Example (replace placeholders):
+-- SELECT vault.create_secret(
+--   'https://your-deployed-app.example.com',
+--   'app_base_url',
+--   'Base URL for app cron HTTP jobs (no trailing slash)'
+-- );
+--
+-- SELECT vault.create_secret(
+--   'replace-with-strong-random-secret',
+--   'app_cron_secret',
+--   'Bearer token for Authorization on /api/**/jobs/*'
+-- );
+--
+-- Verify (shows names only; decrypted values visible to privileged roles):
+-- SELECT name, description, created_at
+-- FROM vault.secrets
+-- WHERE name IN ('app_base_url', 'app_cron_secret');
+--
+-- Manual smoke test after secrets exist:
+-- SELECT public.notification_outbox_drain();
+-- SELECT public.subscriptions_apply_pending_plan_changes();
+-- SELECT public.billing_invoices_create_due_period();
+-- SELECT public.billing_invoices_mark_past_due();
+-- SELECT public.subscriptions_apply_grace_expiry();
+-- SELECT public.subscriptions_apply_beta_trial_expiry();
+-- SELECT public.subscriptions_advance_free_periods();
+--
+-- Inspect recent pg_net responses if available:
+-- SELECT id, status_code, created
+-- FROM net._http_response
+-- ORDER BY created DESC
+-- LIMIT 20;
