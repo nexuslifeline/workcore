@@ -53,6 +53,7 @@ export function AuthenticatedLayout({ children, sidebarNav }: AuthenticatedLayou
   const isPurchaseInvoiceEditPage = pathname?.match(/^\/purchase-invoices\/[^/]+\/edit$/);
   const isPaymentEditPage = pathname?.match(/^\/payments\/[^/]+\/edit$/);
   const isSupplierPaymentEditPage = pathname?.match(/^\/supplier-payments\/[^/]+\/edit$/);
+  const isProjectEditPage = pathname?.match(/^\/projects\/[^/]+\/edit$/);
   const isBankReconciliationWorkspacePage = pathname?.match(/^\/accounting\/bank-reconciliation\/[^/]+$/);
   const isGeneralLedgerPage =
     pathname?.startsWith("/accounting/general-ledger") || pathname?.startsWith("/reports/general-ledger");
@@ -75,6 +76,7 @@ export function AuthenticatedLayout({ children, sidebarNav }: AuthenticatedLayou
     !!isPurchaseInvoiceEditPage ||
     !!isPaymentEditPage ||
     !!isSupplierPaymentEditPage ||
+    !!isProjectEditPage ||
     !!isBankReconciliationWorkspacePage;
 
   // Viewport lock is only for full-bleed workspaces that manage their own scroll.
@@ -93,6 +95,7 @@ export function AuthenticatedLayout({ children, sidebarNav }: AuthenticatedLayou
     !!isPurchaseInvoiceEditPage ||
     !!isPaymentEditPage ||
     !!isSupplierPaymentEditPage ||
+    !!isProjectEditPage ||
     !!isBankReconciliationWorkspacePage;
 
   const useFixedMain = isGeneralLedgerPage || isReportDetailPage;

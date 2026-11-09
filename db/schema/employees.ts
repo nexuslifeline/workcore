@@ -1,4 +1,4 @@
-import { date, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { date, numeric, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { employeeGenderEnum, employeeStatusEnum } from "./enums";
 import { organizations } from "./organizations";
 
@@ -21,6 +21,7 @@ export const employees = pgTable(
         sssNumber: text("sss_number"),
         philhealthNumber: text("philhealth_number"),
         status: employeeStatusEnum("status").default("active").notNull(),
+        hourlyRate: numeric("hourly_rate", { precision: 12, scale: 2 }).default("0").notNull(),
         createdAt: timestamp("created_at").defaultNow().notNull(),
         updatedAt: timestamp("updated_at").defaultNow().notNull().$onUpdate(() => new Date()),
     },

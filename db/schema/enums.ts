@@ -34,3 +34,18 @@ export const employeeStatusEnum = pgEnum("employee_status", [
     "active",
     "inactive",
 ]);
+
+export const projectStatusEnum = pgEnum("project_status", [
+    "draft",
+    "approved",
+    "in_progress",
+    "cancelled",
+    "completed",
+]);
+
+export const projectTaskStatusEnum = pgEnum("project_task_status", [
+    "pending",
+    "in_progress",
+    "completed",
+    "cancelled",
+]);

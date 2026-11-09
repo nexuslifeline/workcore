@@ -4,6 +4,8 @@
 export const PERMISSIONS = {
   DASHBOARD: 'dashboard',
   EMPLOYEES: 'employees',
+  PROJECTS: 'projects',
+  PROJECT_WORK_LOGS: 'project_work_logs',
   SYSTEM_USERS: 'system_users',
   SYSTEM_ROLES: 'system_roles',
   SYSTEM_ORGANIZATIONS: 'system_organizations',
