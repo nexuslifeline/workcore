@@ -7,6 +7,7 @@ import {
   validateRequestContext,
 } from '@/services/server/organizations/organization-service'
 import {
+  deleteProjectWorkLog,
   ProjectWorkLogEmployeeError,
   updateProjectWorkLog,
 } from '@/services/server/projects/project-service'
@@ -67,5 +68,22 @@ export async function PATCH(
     if (error instanceof ProjectWorkLogEmployeeError) return badRequestResponse(error.message)
     if (isWorkLogInputError(error)) return badRequestResponse(error.message)
     return errorResponse('Failed to update work log', 500, error)
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string; taskId: string; workLogId: string }> }
+) {
+  try {
+    const { id, taskId, workLogId } = await params
+    const ctx = validateRequestContext(await resolveRequestContext(request))
+    validatePermissions(await resolvePermissions(ctx), PERMISSIONS.PROJECTS)
+    const deleted = await deleteProjectWorkLog(ctx.organization.id, id, taskId, workLogId)
+    if (!deleted) return notFoundResponse('Work log not found')
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    if (error instanceof NextResponse) return error
+    return errorResponse('Failed to delete work log', 500, error)
   }
 }

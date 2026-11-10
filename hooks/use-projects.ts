@@ -3,14 +3,17 @@ import {
   createProject,
   createProjectTask,
   createProjectWorkLog,
+  deleteProjectWorkLog,
   getProject,
   getProjects,
   updateProject,
+  updateProjectTask,
   updateProjectWorkLog,
 } from '@/services/client/projects/project-service'
 import type {
   ProjectCreateInput,
   ProjectTaskCreateInput,
+  ProjectTaskUpdateInput,
   ProjectUpdateInput,
   ProjectWorkLogInput,
 } from '@/types/project'
@@ -56,6 +59,18 @@ export function useCreateProjectTask(projectId: string) {
   })
 }
 
+export function useUpdateProjectTask(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ taskId, input }: { taskId: string; input: ProjectTaskUpdateInput }) =>
+      updateProjectTask(projectId, taskId, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
 export function useCreateProjectWorkLog(projectId: string) {
   const queryClient = useQueryClient()
   return useMutation({
@@ -80,6 +95,18 @@ export function useUpdateProjectWorkLog(projectId: string) {
       workLogId: string
       input: ProjectWorkLogInput
     }) => updateProjectWorkLog(projectId, taskId, workLogId, input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] })
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+    },
+  })
+}
+
+export function useDeleteProjectWorkLog(projectId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ taskId, workLogId }: { taskId: string; workLogId: string }) =>
+      deleteProjectWorkLog(projectId, taskId, workLogId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] })
       queryClient.invalidateQueries({ queryKey: ['projects'] })

@@ -4,6 +4,7 @@ import type {
   ProjectCreateInput,
   ProjectTaskCreateInput,
   ProjectTaskListItem,
+  ProjectTaskUpdateInput,
   ProjectUpdateInput,
   ProjectWorkLogInput,
   ProjectWorkLogListItem,
@@ -68,6 +69,19 @@ export async function createProjectTask(
   return data.task
 }
 
+export async function updateProjectTask(
+  projectId: string,
+  taskId: string,
+  input: ProjectTaskUpdateInput
+): Promise<ProjectTaskListItem> {
+  const { data } = await api.patch<{ task: ProjectTaskListItem }>(
+    `/projects/${projectId}/tasks/${taskId}`,
+    input,
+    { skipErrorToast: true }
+  )
+  return data.task
+}
+
 export async function createProjectWorkLog(
   projectId: string,
   taskId: string,
@@ -93,6 +107,16 @@ export async function updateProjectWorkLog(
     { skipErrorToast: true }
   )
   return data.workLog
+}
+
+export async function deleteProjectWorkLog(
+  projectId: string,
+  taskId: string,
+  workLogId: string
+): Promise<void> {
+  await api.delete(`/projects/${projectId}/tasks/${taskId}/work-logs/${workLogId}`, {
+    skipErrorToast: true,
+  })
 }
 
 export async function updateProject(id: string, input: ProjectUpdateInput): Promise<ProjectResponse> {

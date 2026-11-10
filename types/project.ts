@@ -2,6 +2,13 @@ export type ProjectStatus = 'draft' | 'approved' | 'in_progress' | 'cancelled' |
 
 export type ProjectTaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
 
+export const PROJECT_TASK_STATUSES: ProjectTaskStatus[] = [
+  'pending',
+  'in_progress',
+  'completed',
+  'cancelled',
+]
+
 export const PROJECT_STATUSES: ProjectStatus[] = [
   'draft',
   'approved',
@@ -15,6 +22,16 @@ export type ProjectTaskCreateInput = {
   description?: string | null
   budget?: string | null
   dueDate?: string | null
+}
+
+export type ProjectTaskUpdateInput = {
+  name: string
+  description?: string | null
+  budget: string
+  estimatedHours: string
+  plannedStartDate?: string | null
+  plannedEndDate?: string | null
+  status: ProjectTaskStatus
 }
 
 export type ProjectWorkLogInput = {

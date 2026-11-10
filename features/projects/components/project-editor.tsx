@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { DotsVerticalIcon } from '@radix-ui/react-icons'
 import { format } from 'date-fns'
 import {
   AlignLeft,
@@ -11,6 +12,8 @@ import {
   Clock,
   Pencil,
   Plus,
+  Trash2,
+  UserPen,
   Wallet,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -21,6 +24,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/common/collapsible'
+import { DeleteDialog } from '@/components/common/delete-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/common/dropdown-menu'
 import { FallbackSection } from '@/components/common/fallback-section'
 import { Skeleton } from '@/components/common/skeleton'
 import {
@@ -44,7 +55,7 @@ import {
   TwoPaneWorkspaceLayout,
   TwoPaneWorkspaceLeftColumn,
 } from '@/components/common/two-pane-workspace'
-import { useProject, useUpdateProject } from '@/hooks/use-projects'
+import { useDeleteProjectWorkLog, useProject, useUpdateProject } from '@/hooks/use-projects'
 import { cn } from '@/lib/utils'
 import { toCurrency } from '@/lib/utils/currency'
 import { useCurrencyStore } from '@/stores/currency-store'
@@ -57,6 +68,7 @@ import {
 import { projectStatuses, projectTaskStatuses } from '../data/data'
 import { ProjectEditForm } from './project-edit-form'
 import { ProjectTaskCreateForm } from './project-task-create-form'
+import { ProjectTaskEditForm } from './project-task-edit-form'
 import { ProjectWorkLogForm } from './project-work-log-form'
 
 function errorMessage(error: unknown, fallback: string) {
@@ -295,8 +307,12 @@ function ProjectEditorSkeleton() {
 
 function TaskPanel({ projectId, task }: { projectId: string; task: ProjectTaskListItem }) {
   const description = task.description?.trim()
+  const deleteWorkLog = useDeleteProjectWorkLog(projectId)
+  const [taskEditOpen, setTaskEditOpen] = useState(false)
   const [workLogOpen, setWorkLogOpen] = useState(false)
   const [editingLog, setEditingLog] = useState<ProjectWorkLogListItem | null>(null)
+  const [deletingLog, setDeletingLog] = useState<ProjectWorkLogListItem | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const openCreate = () => {
     setEditingLog(null)
@@ -324,9 +340,34 @@ function TaskPanel({ projectId, task }: { projectId: string; task: ProjectTaskLi
           <StatusBadge value={task.status} statusConfigs={projectTaskStatuses} />
         </span>
       </CollapsibleTrigger>
-      <CollapsibleContent>
-        <TaskDetails task={task} onAddWorkLog={openCreate} onEditWorkLog={openEdit} />
+      <CollapsibleContent className='bg-muted'>
+        <TaskDetails
+          task={task}
+          onEditTask={() => setTaskEditOpen(true)}
+          onAddWorkLog={openCreate}
+          onEditWorkLog={openEdit}
+          onDeleteWorkLog={(log) => {
+            setDeletingLog(log)
+            setDeleteOpen(true)
+          }}
+        />
       </CollapsibleContent>
+      {taskEditOpen ? (
+        <SlidePanel
+          open={taskEditOpen}
+          onOpenChange={setTaskEditOpen}
+          title='Edit task'
+          showDefaultActions={false}
+          className='w-full sm:max-w-xl'
+          contentClassName='flex flex-col overflow-hidden p-0 min-h-0'
+        >
+          <ProjectTaskEditForm
+            projectId={projectId}
+            task={task}
+            onClose={() => setTaskEditOpen(false)}
+          />
+        </SlidePanel>
+      ) : null}
       {workLogOpen ? (
         <SlidePanel
           open={workLogOpen}
@@ -345,25 +386,62 @@ function TaskPanel({ projectId, task }: { projectId: string; task: ProjectTaskLi
           />
         </SlidePanel>
       ) : null}
+      {deletingLog ? (
+        <DeleteDialog
+          open={deleteOpen}
+          onOpenChange={(open) => {
+            setDeleteOpen(open)
+            if (!open) {
+              setTimeout(() => setDeletingLog(null), 500)
+            }
+          }}
+          id={deletingLog.id}
+          displayName={deletingLog.employeeName || 'this work log'}
+          entityName='Work log'
+          entityNameLower='work log'
+          onDelete={async (id) => {
+            await deleteWorkLog.mutateAsync({ taskId: task.id, workLogId: id })
+          }}
+        />
+      ) : null}
     </Collapsible>
   )
 }
 
 function TaskDetails({
   task,
+  onEditTask,
   onAddWorkLog,
   onEditWorkLog,
+  onDeleteWorkLog,
 }: {
   task: ProjectTaskListItem
+  onEditTask: () => void
   onAddWorkLog: () => void
   onEditWorkLog: (log: ProjectWorkLogListItem) => void
+  onDeleteWorkLog: (log: ProjectWorkLogListItem) => void
 }) {
   const description = task.description?.trim()
   return (
-    <div className='space-y-3 bg-muted/30 p-3'>
+    <div className='space-y-4 px-3 py-3'>
       <TaskSection title='Details'>
         <dl className='grid grid-cols-1 text-sm sm:grid-cols-2'>
-          <DetailItem icon={CircleDot} label='Status'>
+          <DetailItem
+            icon={CircleDot}
+            label='Status'
+            action={
+              <Button
+                type='button'
+                variant='ghost'
+                size='icon'
+                className='size-8 shrink-0 text-muted-foreground'
+                aria-label='Edit task'
+                onClick={onEditTask}
+              >
+                <Pencil />
+              </Button>
+            }
+          >
             <StatusBadge value={task.status} statusConfigs={projectTaskStatuses} />
           </DetailItem>
           <DetailItem icon={Calendar} label='Due date'>
@@ -385,14 +463,19 @@ function TaskDetails({
             {money(Number(task.laborSpent))}
           </DetailItem>
           {description ? (
-            <DetailItem icon={AlignLeft} label='Description' className='sm:col-span-2 sm:border-e-0'>
+            <DetailItem icon={AlignLeft} label='Description' className='border-e sm:col-span-2'>
               {description}
             </DetailItem>
           ) : null}
         </dl>
       </TaskSection>
       <TaskSection title='Work logs'>
-        <WorkLogTable logs={task.workLogs} onAdd={onAddWorkLog} onEdit={onEditWorkLog} />
+        <WorkLogTable
+          logs={task.workLogs}
+          onAdd={onAddWorkLog}
+          onEdit={onEditWorkLog}
+          onDelete={onDeleteWorkLog}
+        />
       </TaskSection>
     </div>
   )
@@ -400,12 +483,14 @@ function TaskDetails({
 
 function TaskSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <Collapsible defaultOpen className='group/section overflow-hidden rounded-md border bg-background'>
-      <CollapsibleTrigger className='flex w-full items-center justify-between bg-muted/50 px-4 py-2.5 text-left text-sm font-medium'>
-        <span>{title}</span>
+    <Collapsible defaultOpen className='group/section'>
+      <CollapsibleTrigger className='flex w-full items-center justify-between gap-3 py-2 text-left'>
+        <span className='text-sm font-medium'>{title}</span>
         <ChevronDown className='size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=closed]/section:-rotate-90' />
       </CollapsibleTrigger>
-      <CollapsibleContent>{children}</CollapsibleContent>
+      <CollapsibleContent>
+        <div className='overflow-hidden border bg-card'>{children}</div>
+      </CollapsibleContent>
     </Collapsible>
   )
 }
@@ -414,19 +499,55 @@ function DetailItem({
   icon: Icon,
   label,
   children,
+  action,
   className,
 }: {
   icon: React.ComponentType<{ className?: string }>
   label: string
   children: React.ReactNode
+  action?: React.ReactNode
   className?: string
 }) {
   return (
     <div className={cn('flex items-center gap-3 border-b px-4 py-3 sm:odd:border-e', className)}>
       <Icon className='size-4 shrink-0 text-muted-foreground' />
       <dt className='w-32 shrink-0 text-muted-foreground'>{label}</dt>
-      <dd className='min-w-0 font-medium'>{children}</dd>
+      <dd className='min-w-0 flex-1 font-medium'>{children}</dd>
+      {action}
     </div>
+  )
+}
+
+function WorkLogRowActions({
+  onEdit,
+  onDelete,
+}: {
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant='ghost'
+          className='flex h-8 w-8 shrink-0 p-0 data-[state=open]:bg-muted'
+        >
+          <DotsVerticalIcon className='h-4 w-4' />
+          <span className='sr-only'>Open menu</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align='end' className='w-[160px]'>
+        <DropdownMenuItem onClick={onEdit}>
+          <UserPen className='mr-2 h-4 w-4 flex-shrink-0' />
+          <span className='flex-1'>Edit</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant='destructive' className='text-red-500!' onClick={onDelete}>
+          <Trash2 className='mr-2 h-4 w-4 flex-shrink-0' />
+          <span className='flex-1'>Delete</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -434,26 +555,28 @@ function WorkLogTable({
   logs,
   onAdd,
   onEdit,
+  onDelete,
 }: {
   logs: ProjectWorkLogListItem[]
   onAdd: () => void
   onEdit: (log: ProjectWorkLogListItem) => void
+  onDelete: (log: ProjectWorkLogListItem) => void
 }) {
   const totalHours = logs.reduce((sum, log) => sum + Number(log.totalHours || 0), 0)
   const totalAmount = logs.reduce((sum, log) => sum + Number(log.totalAmount || 0), 0)
 
   return (
     <div>
-      <Table className='[&_td]:px-4 [&_td]:py-3 [&_th]:px-4 [&_th]:py-3'>
+      <Table className='[&_td]:px-4 [&_td]:py-3 [&_th]:bg-[color-mix(in_oklch,var(--muted),var(--foreground)_10%)] [&_th]:px-4 [&_th]:py-3 dark:[&_th]:bg-[color-mix(in_oklch,var(--card),var(--muted)_45%)]'>
         <TableHeader>
-          <TableRow>
+          <TableRow className='hover:bg-transparent'>
             <TableHead>Employee</TableHead>
             <TableHead>Start</TableHead>
             <TableHead>End</TableHead>
-            <TableHead className='text-right'>Hours</TableHead>
-            <TableHead className='text-right'>Rate</TableHead>
-            <TableHead className='text-right'>Amount</TableHead>
             <TableHead>Notes</TableHead>
+            <TableHead className='text-right'>Rate</TableHead>
+            <TableHead className='text-right'>Hours</TableHead>
+            <TableHead className='text-right'>Amount</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -465,14 +588,19 @@ function WorkLogTable({
             </TableRow>
           ) : (
             logs.map((log) => (
-              <TableRow key={log.id} className='cursor-pointer' onClick={() => onEdit(log)}>
-                <TableCell>{log.employeeName}</TableCell>
+              <TableRow key={log.id}>
+                <TableCell>
+                  <div className='flex w-full items-center gap-2'>
+                    <span className='min-w-0 flex-1'>{log.employeeName}</span>
+                    <WorkLogRowActions onEdit={() => onEdit(log)} onDelete={() => onDelete(log)} />
+                  </div>
+                </TableCell>
                 <TableCell>{formatDateTime(log.startDatetime)}</TableCell>
                 <TableCell>{formatDateTime(log.endDatetime)}</TableCell>
-                <TableCell className='text-right tabular-nums'>{log.totalHours}</TableCell>
-                <TableCell className='text-right tabular-nums'>{money(Number(log.hourlyRate))}</TableCell>
-                <TableCell className='text-right tabular-nums'>{money(Number(log.totalAmount))}</TableCell>
                 <TableCell className='whitespace-normal'>{log.notes || '-'}</TableCell>
+                <TableCell className='text-right tabular-nums'>{money(Number(log.hourlyRate))}</TableCell>
+                <TableCell className='text-right tabular-nums'>{log.totalHours}</TableCell>
+                <TableCell className='text-right tabular-nums'>{money(Number(log.totalAmount))}</TableCell>
               </TableRow>
             ))
           )}
@@ -480,13 +608,12 @@ function WorkLogTable({
         <TableFooter className='bg-transparent'>
           {logs.length > 0 ? (
             <TableRow>
-              <TableCell colSpan={3} className='text-right'>
+              <TableCell colSpan={4} className='text-right'>
                 Total
               </TableCell>
+              <TableCell />
               <TableCell className='text-right tabular-nums'>{totalHours.toFixed(2)}</TableCell>
-              <TableCell />
               <TableCell className='text-right tabular-nums'>{money(totalAmount)}</TableCell>
-              <TableCell />
             </TableRow>
           ) : null}
           <TableRow className='hover:bg-transparent'>

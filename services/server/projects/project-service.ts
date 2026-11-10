@@ -11,11 +11,14 @@ import {
 import { db } from '@/lib/db'
 import {
   PROJECT_STATUSES,
+  PROJECT_TASK_STATUSES,
   type Project,
   type ProjectCreateInput,
   type ProjectStatus,
   type ProjectTaskCreateInput,
   type ProjectTaskListItem,
+  type ProjectTaskStatus,
+  type ProjectTaskUpdateInput,
   type ProjectUpdateInput,
   type ProjectWorkLogInput,
   type ProjectWorkLogListItem,
@@ -82,11 +85,22 @@ function parseDate(value: string | null | undefined): string | null {
 }
 
 function parseBudget(value: string): string {
+  return parseAmount(value, 'Budget')
+}
+
+function parseAmount(value: string, label: string): string {
   const num = Number(value)
   if (!Number.isFinite(num) || num < 0) {
-    throw new Error('Budget must be zero or more')
+    throw new Error(`${label} must be zero or more`)
   }
   return num.toFixed(2)
+}
+
+function parseTaskStatus(value: string): ProjectTaskStatus {
+  if (!PROJECT_TASK_STATUSES.includes(value as ProjectTaskStatus)) {
+    throw new Error('Status is not valid')
+  }
+  return value as ProjectTaskStatus
 }
 
 function parseTimestamp(value: string | null | undefined, label: string): Date {
@@ -472,6 +486,45 @@ export async function createProjectTask(
   }
 }
 
+function taskUpdateValues(input: ProjectTaskUpdateInput) {
+  const plannedStartDate = parseDate(input.plannedStartDate)
+  const plannedEndDate = parseDate(input.plannedEndDate)
+  if (plannedStartDate && plannedEndDate && plannedEndDate < plannedStartDate) {
+    throw new Error('Due date must be on or after the start date')
+  }
+  return {
+    name: input.name.trim(),
+    description: blankToNull(input.description),
+    budget: parseBudget(input.budget),
+    estimatedHours: parseAmount(input.estimatedHours, 'Estimated hours'),
+    plannedStartDate,
+    plannedEndDate,
+    status: parseTaskStatus(input.status),
+  }
+}
+
+export async function updateProjectTask(
+  organizationId: string,
+  userId: string,
+  projectId: string,
+  taskId: string,
+  input: ProjectTaskUpdateInput
+): Promise<ProjectTaskListItem | null> {
+  const existing = await requireProjectTask(organizationId, projectId, taskId)
+  if (!existing) return null
+  const [row] = await db
+    .update(projectTasks)
+    .set({
+      updatedBy: userId,
+      ...taskUpdateValues(input),
+    })
+    .where(and(eq(projectTasks.id, taskId), eq(projectTasks.projectId, projectId)))
+    .returning({ id: projectTasks.id })
+  if (!row) return null
+  const tasks = await listProjectTasks(organizationId, projectId)
+  return tasks?.find((task) => task.id === taskId) ?? null
+}
+
 function mapWorkLog(log: {
   id: string
   employeeId: string
@@ -615,6 +668,27 @@ export async function updateProjectWorkLog(
     .returning({ id: projectWorkLogs.id })
   if (!row) return null
   return selectWorkLog(row.id)
+}
+
+export async function deleteProjectWorkLog(
+  organizationId: string,
+  projectId: string,
+  taskId: string,
+  workLogId: string
+): Promise<boolean> {
+  const task = await requireProjectTask(organizationId, projectId, taskId)
+  if (!task) return false
+  const [row] = await db
+    .delete(projectWorkLogs)
+    .where(
+      and(
+        eq(projectWorkLogs.id, workLogId),
+        eq(projectWorkLogs.projectId, projectId),
+        eq(projectWorkLogs.projectTaskId, taskId)
+      )
+    )
+    .returning({ id: projectWorkLogs.id })
+  return Boolean(row)
 }
 
 export async function getProject(organizationId: string, id: string): Promise<Project | null> {
