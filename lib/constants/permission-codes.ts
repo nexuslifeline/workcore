@@ -10,6 +10,7 @@ export const PERMISSIONS = {
   SYSTEM_ROLES: 'system_roles',
   SYSTEM_ORGANIZATIONS: 'system_organizations',
   SETTINGS_ORGANIZATION: 'settings_organization',
+  SETTINGS_PAYROLL: 'settings_payroll',
 } as const
 
 export type PermissionCode = (typeof PERMISSIONS)[keyof typeof PERMISSIONS]

@@ -5,6 +5,7 @@ type RouteRule =
   | { path: string; anyOf: readonly string[]; code?: never }
 
 const ROUTE_PERMISSION_MAP: RouteRule[] = [
+  { path: '/settings/payroll', code: PERMISSIONS.SETTINGS_PAYROLL },
   { path: '/settings/appearance', code: null },
   { path: '/settings/account', code: null },
   { path: '/settings/display', code: null },

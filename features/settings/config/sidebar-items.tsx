@@ -9,8 +9,10 @@ import {
   Layout,
   Languages,
   Globe2,
+  Banknote,
 } from 'lucide-react'
 import type { JSX } from 'react'
+import { PERMISSIONS } from '@/lib/constants/permission-codes'
 
 export type SidebarNavItem = {
   code?: string
@@ -57,6 +59,15 @@ export const accountSidebarItems: SidebarNavItem[] = [
     title: 'Preferences',
     href: '/settings/account/preferences',
     icon: <Globe2 size={18} />,
+  },
+]
+
+export const payrollSidebarItems: SidebarNavItem[] = [
+  {
+    code: PERMISSIONS.SETTINGS_PAYROLL,
+    title: 'Payroll',
+    href: '/settings/payroll',
+    icon: <Banknote size={18} />,
   },
 ]
 

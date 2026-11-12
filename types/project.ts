@@ -38,6 +38,8 @@ export type ProjectWorkLogInput = {
   employeeId: string
   startDatetime: string
   endDatetime: string
+  workDate: string
+  breakMinutes: number
   hourlyRate: string
   notes?: string | null
 }
@@ -46,10 +48,20 @@ export type ProjectWorkLogListItem = {
   id: string
   employeeId: string
   employeeName: string
+  employeeCode: string
+  employeeImageUrl: string | null
   startDatetime: string
   endDatetime: string
+  workDate: string
+  breakMinutes: number
+  maxRegularShiftHours: number
+  nsdStartTime: string
+  nsdEndTime: string
   hourlyRate: string
   totalHours: string
+  totalRegularHours: string
+  totalOvertimeHours: string
+  totalNightShiftDifferentialHours: string
   totalAmount: string
   notes: string | null
 }

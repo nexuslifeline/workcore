@@ -9,6 +9,7 @@ import {
   projects,
 } from '@/db/schema'
 import { db } from '@/lib/db'
+import { getPayrollSetup } from '@/services/server/payroll/payroll-setup-service'
 import {
   PROJECT_STATUSES,
   PROJECT_TASK_STATUSES,
@@ -66,6 +67,47 @@ function toMoney(value: unknown): string {
 
 function toIso(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value
+}
+
+function manilaDate(value: Date): string {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Manila',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(value)
+  const year = parts.find((part) => part.type === 'year')?.value
+  const month = parts.find((part) => part.type === 'month')?.value
+  const day = parts.find((part) => part.type === 'day')?.value
+  return `${year}-${month}-${day}`
+}
+
+function toPgTime(value: string): string {
+  const match = /^(\d{2}):(\d{2})(?::(\d{2}))?/.exec(value)
+  if (!match) return value
+  return `${match[1]}:${match[2]}:${match[3] ?? '00'}`
+}
+
+const workLogColumns = {
+  id: projectWorkLogs.id,
+  employeeId: projectWorkLogs.employeeId,
+  employeeName: employees.name,
+  employeeCode: employees.code,
+  employeeImageUrl: employees.imageUrl,
+  startDatetime: projectWorkLogs.startDatetime,
+  endDatetime: projectWorkLogs.endDatetime,
+  workDate: projectWorkLogs.workDate,
+  breakMinutes: projectWorkLogs.breakMinutes,
+  maxRegularShiftHours: projectWorkLogs.maxRegularShiftHours,
+  nsdStartTime: projectWorkLogs.nsdStartTime,
+  nsdEndTime: projectWorkLogs.nsdEndTime,
+  hourlyRate: projectWorkLogs.hourlyRate,
+  totalHours: projectWorkLogs.totalHours,
+  totalRegularHours: projectWorkLogs.totalRegularHours,
+  totalOvertimeHours: projectWorkLogs.totalOvertimeHours,
+  totalNightShiftDifferentialHours: projectWorkLogs.totalNightShiftDifferentialHours,
+  totalAmount: projectWorkLogs.totalAmount,
+  notes: projectWorkLogs.notes,
 }
 
 function progressPercent(completed: unknown, active: unknown): number {
@@ -381,16 +423,8 @@ export async function listProjectTasks(
       .orderBy(desc(projectTasks.createdAt)),
     db
       .select({
-        id: projectWorkLogs.id,
+        ...workLogColumns,
         projectTaskId: projectWorkLogs.projectTaskId,
-        employeeId: projectWorkLogs.employeeId,
-        employeeName: employees.name,
-        startDatetime: projectWorkLogs.startDatetime,
-        endDatetime: projectWorkLogs.endDatetime,
-        hourlyRate: projectWorkLogs.hourlyRate,
-        totalHours: projectWorkLogs.totalHours,
-        totalAmount: projectWorkLogs.totalAmount,
-        notes: projectWorkLogs.notes,
       })
       .from(projectWorkLogs)
       .innerJoin(employees, eq(employees.id, projectWorkLogs.employeeId))
@@ -400,17 +434,7 @@ export async function listProjectTasks(
 
   const workLogsByTask = new Map<string, ProjectWorkLogListItem[]>()
   for (const log of logs) {
-    const item: ProjectWorkLogListItem = {
-      id: log.id,
-      employeeId: log.employeeId,
-      employeeName: log.employeeName,
-      startDatetime: toIso(log.startDatetime),
-      endDatetime: toIso(log.endDatetime),
-      hourlyRate: toMoney(log.hourlyRate),
-      totalHours: toMoney(log.totalHours),
-      totalAmount: toMoney(log.totalAmount),
-      notes: log.notes,
-    }
+    const item = mapWorkLog(log)
     const list = workLogsByTask.get(log.projectTaskId)
     if (list) list.push(item)
     else workLogsByTask.set(log.projectTaskId, [item])
@@ -529,10 +553,20 @@ function mapWorkLog(log: {
   id: string
   employeeId: string
   employeeName: string
+  employeeCode: string
+  employeeImageUrl: string | null
   startDatetime: Date | string
   endDatetime: Date | string
+  workDate: string
+  breakMinutes: number
+  maxRegularShiftHours: number
+  nsdStartTime: string
+  nsdEndTime: string
   hourlyRate: unknown
   totalHours: unknown
+  totalRegularHours: unknown
+  totalOvertimeHours: unknown
+  totalNightShiftDifferentialHours: unknown
   totalAmount: unknown
   notes: string | null
 }): ProjectWorkLogListItem {
@@ -540,10 +574,20 @@ function mapWorkLog(log: {
     id: log.id,
     employeeId: log.employeeId,
     employeeName: log.employeeName,
+    employeeCode: log.employeeCode,
+    employeeImageUrl: log.employeeImageUrl,
     startDatetime: toIso(log.startDatetime),
     endDatetime: toIso(log.endDatetime),
+    workDate: log.workDate.slice(0, 10),
+    breakMinutes: Number(log.breakMinutes),
+    maxRegularShiftHours: Number(log.maxRegularShiftHours),
+    nsdStartTime: toPgTime(String(log.nsdStartTime)),
+    nsdEndTime: toPgTime(String(log.nsdEndTime)),
     hourlyRate: toMoney(log.hourlyRate),
     totalHours: toMoney(log.totalHours),
+    totalRegularHours: toMoney(log.totalRegularHours),
+    totalOvertimeHours: toMoney(log.totalOvertimeHours),
+    totalNightShiftDifferentialHours: toMoney(log.totalNightShiftDifferentialHours),
     totalAmount: toMoney(log.totalAmount),
     notes: log.notes,
   }
@@ -551,17 +595,7 @@ function mapWorkLog(log: {
 
 async function selectWorkLog(workLogId: string): Promise<ProjectWorkLogListItem | null> {
   const [log] = await db
-    .select({
-      id: projectWorkLogs.id,
-      employeeId: projectWorkLogs.employeeId,
-      employeeName: employees.name,
-      startDatetime: projectWorkLogs.startDatetime,
-      endDatetime: projectWorkLogs.endDatetime,
-      hourlyRate: projectWorkLogs.hourlyRate,
-      totalHours: projectWorkLogs.totalHours,
-      totalAmount: projectWorkLogs.totalAmount,
-      notes: projectWorkLogs.notes,
-    })
+    .select(workLogColumns)
     .from(projectWorkLogs)
     .innerJoin(employees, eq(employees.id, projectWorkLogs.employeeId))
     .where(eq(projectWorkLogs.id, workLogId))
@@ -600,14 +634,37 @@ async function requireActiveEmployee(organizationId: string, employeeId: string)
   if (!employee) throw new ProjectWorkLogEmployeeError()
 }
 
+function parseWorkDate(value: string): string {
+  const trimmed = value.trim()
+  if (!trimmed) throw new Error('Work date is required')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) throw new Error('Work date is not valid')
+  return trimmed
+}
+
+function parseBreakMinutes(value: number): number {
+  if (!Number.isInteger(value) || value < 0) throw new Error('Break must be zero or more')
+  return value
+}
+
 function workLogValues(input: ProjectWorkLogInput) {
   const startDatetime = parseTimestamp(input.startDatetime, 'Start')
   const endDatetime = parseTimestamp(input.endDatetime, 'End')
   if (endDatetime <= startDatetime) throw new Error('End must be after start')
+  const workDate = parseWorkDate(input.workDate)
+  const breakMinutes = parseBreakMinutes(input.breakMinutes)
+  const shiftSeconds = (endDatetime.getTime() - startDatetime.getTime()) / 1000
+  if (breakMinutes * 60 > shiftSeconds) throw new Error('Break cannot be longer than the shift')
+  const startDate = manilaDate(startDatetime)
+  const endDate = manilaDate(endDatetime)
+  if (workDate < startDate || workDate > endDate) {
+    throw new Error('Work date must be a date the shift covers')
+  }
   return {
     employeeId: input.employeeId,
     startDatetime,
     endDatetime,
+    workDate,
+    breakMinutes,
     hourlyRate: parseHourlyRate(input.hourlyRate),
     notes: blankToNull(input.notes),
   }
@@ -624,6 +681,7 @@ export async function createProjectWorkLog(
   if (!task) return null
   await requireActiveEmployee(organizationId, input.employeeId)
   const values = workLogValues(input)
+  const payroll = await getPayrollSetup(organizationId)
   const [row] = await db
     .insert(projectWorkLogs)
     .values({
@@ -632,6 +690,9 @@ export async function createProjectWorkLog(
       createdBy: userId,
       updatedBy: userId,
       ...values,
+      maxRegularShiftHours: payroll?.maxRegularShiftHours ?? 8,
+      nsdStartTime: toPgTime(payroll?.nightShiftDifferentialStartTime ?? '22:00'),
+      nsdEndTime: toPgTime(payroll?.nightShiftDifferentialEndTime ?? '06:00'),
     })
     .returning({ id: projectWorkLogs.id })
   if (!row) throw new Error('Failed to create work log')

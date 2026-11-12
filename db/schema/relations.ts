@@ -11,18 +11,23 @@ import { internalUserRoles } from "./internal-user-roles";
 import { invitations } from "./invitations";
 import { organizationUsers } from "./organization-users";
 import { organizations } from "./organizations";
+import { payrollSetup } from "./payroll-setup";
 import { permissions } from "./permissions";
 import { profiles } from "./profiles";
 import { rolePermissions } from "./role-permissions";
 import { roles } from "./roles";
 
-export const organizationsRelations = relations(organizations, ({ many }) => ({
+export const organizationsRelations = relations(organizations, ({ many, one }) => ({
     users: many(organizationUsers),
     invitations: many(invitations),
     roles: many(roles),
     employees: many(employees),
     projects: many(projects),
     appNotifications: many(appNotifications),
+    payrollSetup: one(payrollSetup, {
+        fields: [organizations.id],
+        references: [payrollSetup.organizationId],
+    }),
 }));
 
 export const organizationUsersRelations = relations(organizationUsers, ({ one }) => ({
@@ -83,6 +88,13 @@ export const internalUserRolesRelations = relations(internalUserRoles, ({ one })
     user: one(authUsers, {
         fields: [internalUserRoles.userId],
         references: [authUsers.id],
+    }),
+}));
+
+export const payrollSetupRelations = relations(payrollSetup, ({ one }) => ({
+    organization: one(organizations, {
+        fields: [payrollSetup.organizationId],
+        references: [organizations.id],
     }),
 }));
 

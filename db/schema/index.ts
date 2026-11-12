@@ -15,4 +15,5 @@ export * from "./project-tasks";
 export * from "./project-task-assignees";
 export * from "./project-work-logs";
 export * from "./project-expenses";
+export * from "./payroll-setup";
 export * from "./relations";

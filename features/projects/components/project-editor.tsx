@@ -17,6 +17,7 @@ import {
   Wallet,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Avatar } from '@/components/common/avatar'
 import { StatusBadge } from '@/components/common/badges/status-badge'
 import { Button } from '@/components/common/button'
 import {
@@ -563,26 +564,37 @@ function WorkLogTable({
   onDelete: (log: ProjectWorkLogListItem) => void
 }) {
   const totalHours = logs.reduce((sum, log) => sum + Number(log.totalHours || 0), 0)
+  const totalRegular = logs.reduce((sum, log) => sum + Number(log.totalRegularHours || 0), 0)
+  const totalOvertime = logs.reduce((sum, log) => sum + Number(log.totalOvertimeHours || 0), 0)
+  const totalNight = logs.reduce(
+    (sum, log) => sum + Number(log.totalNightShiftDifferentialHours || 0),
+    0
+  )
   const totalAmount = logs.reduce((sum, log) => sum + Number(log.totalAmount || 0), 0)
 
   return (
-    <div>
+    <div className='overflow-x-auto'>
       <Table className='[&_td]:px-4 [&_td]:py-3 [&_th]:bg-[color-mix(in_oklch,var(--muted),var(--foreground)_10%)] [&_th]:px-4 [&_th]:py-3 dark:[&_th]:bg-[color-mix(in_oklch,var(--card),var(--muted)_45%)]'>
         <TableHeader>
           <TableRow className='hover:bg-transparent'>
             <TableHead>Employee</TableHead>
-            <TableHead>Start</TableHead>
-            <TableHead>End</TableHead>
+            <TableHead>Work date</TableHead>
+            <TableHead>Time in</TableHead>
+            <TableHead>Time out</TableHead>
             <TableHead>Notes</TableHead>
             <TableHead className='text-right'>Rate</TableHead>
+            <TableHead className='text-right'>Break (min)</TableHead>
             <TableHead className='text-right'>Hours</TableHead>
+            <TableHead className='text-right'>Regular</TableHead>
+            <TableHead className='text-right'>OT</TableHead>
+            <TableHead className='text-right'>Night</TableHead>
             <TableHead className='text-right'>Amount</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {logs.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className='text-muted-foreground'>
+              <TableCell colSpan={12} className='text-muted-foreground'>
                 No work logs
               </TableCell>
             </TableRow>
@@ -590,16 +602,27 @@ function WorkLogTable({
             logs.map((log) => (
               <TableRow key={log.id}>
                 <TableCell>
-                  <div className='flex w-full items-center gap-2'>
-                    <span className='min-w-0 flex-1'>{log.employeeName}</span>
+                  <div className='flex w-full items-center gap-2.5'>
+                    <Avatar src={log.employeeImageUrl} name={log.employeeName} size={32} square />
+                    <div className='min-w-0 flex-1'>
+                      <div className='truncate font-medium'>{log.employeeName}</div>
+                      <div className='truncate text-xs text-muted-foreground'>{log.employeeCode}</div>
+                    </div>
                     <WorkLogRowActions onEdit={() => onEdit(log)} onDelete={() => onDelete(log)} />
                   </div>
                 </TableCell>
+                <TableCell>{formatDateOnly(log.workDate)}</TableCell>
                 <TableCell>{formatDateTime(log.startDatetime)}</TableCell>
                 <TableCell>{formatDateTime(log.endDatetime)}</TableCell>
                 <TableCell className='whitespace-normal'>{log.notes || '-'}</TableCell>
                 <TableCell className='text-right tabular-nums'>{money(Number(log.hourlyRate))}</TableCell>
+                <TableCell className='text-right tabular-nums'>{log.breakMinutes}</TableCell>
                 <TableCell className='text-right tabular-nums'>{log.totalHours}</TableCell>
+                <TableCell className='text-right tabular-nums'>{log.totalRegularHours}</TableCell>
+                <TableCell className='text-right tabular-nums'>{log.totalOvertimeHours}</TableCell>
+                <TableCell className='text-right tabular-nums'>
+                  {log.totalNightShiftDifferentialHours}
+                </TableCell>
                 <TableCell className='text-right tabular-nums'>{money(Number(log.totalAmount))}</TableCell>
               </TableRow>
             ))
@@ -608,16 +631,20 @@ function WorkLogTable({
         <TableFooter className='bg-transparent'>
           {logs.length > 0 ? (
             <TableRow>
-              <TableCell colSpan={4} className='text-right'>
+              <TableCell colSpan={5} className='text-right'>
                 Total
               </TableCell>
               <TableCell />
+              <TableCell />
               <TableCell className='text-right tabular-nums'>{totalHours.toFixed(2)}</TableCell>
+              <TableCell className='text-right tabular-nums'>{totalRegular.toFixed(2)}</TableCell>
+              <TableCell className='text-right tabular-nums'>{totalOvertime.toFixed(2)}</TableCell>
+              <TableCell className='text-right tabular-nums'>{totalNight.toFixed(2)}</TableCell>
               <TableCell className='text-right tabular-nums'>{money(totalAmount)}</TableCell>
             </TableRow>
           ) : null}
           <TableRow className='hover:bg-transparent'>
-            <TableCell colSpan={7} className='!p-0'>
+            <TableCell colSpan={12} className='!p-0'>
               <button
                 type='button'
                 onClick={onAdd}
