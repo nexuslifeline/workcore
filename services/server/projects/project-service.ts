@@ -13,6 +13,7 @@ import { getPayrollSetup } from '@/services/server/payroll/payroll-setup-service
 import {
   PROJECT_STATUSES,
   PROJECT_TASK_STATUSES,
+  PROJECT_TASK_STATUS_TRANSITIONS,
   type Project,
   type ProjectCreateInput,
   type ProjectStatus,
@@ -523,7 +524,6 @@ function taskUpdateValues(input: ProjectTaskUpdateInput) {
     estimatedHours: parseAmount(input.estimatedHours, 'Estimated hours'),
     plannedStartDate,
     plannedEndDate,
-    status: parseTaskStatus(input.status),
   }
 }
 
@@ -547,6 +547,54 @@ export async function updateProjectTask(
   if (!row) return null
   const tasks = await listProjectTasks(organizationId, projectId)
   return tasks?.find((task) => task.id === taskId) ?? null
+}
+
+export async function updateProjectTaskStatus(
+  organizationId: string,
+  userId: string,
+  projectId: string,
+  taskId: string,
+  status: ProjectTaskStatus
+): Promise<ProjectTaskListItem | null> {
+  const existing = await requireProjectTask(organizationId, projectId, taskId)
+  if (!existing) return null
+  const next = parseTaskStatus(status)
+  if (next === existing.status) {
+    const tasks = await listProjectTasks(organizationId, projectId)
+    return tasks?.find((task) => task.id === taskId) ?? null
+  }
+  const allowed = PROJECT_TASK_STATUS_TRANSITIONS[existing.status] ?? []
+  if (!allowed.includes(next)) {
+    throw new Error('Status cannot be changed to that value')
+  }
+  const [row] = await db
+    .update(projectTasks)
+    .set({
+      updatedBy: userId,
+      status: next,
+    })
+    .where(and(eq(projectTasks.id, taskId), eq(projectTasks.projectId, projectId)))
+    .returning({ id: projectTasks.id })
+  if (!row) return null
+  const tasks = await listProjectTasks(organizationId, projectId)
+  return tasks?.find((task) => task.id === taskId) ?? null
+}
+
+export async function deleteProjectTask(
+  organizationId: string,
+  projectId: string,
+  taskId: string
+): Promise<boolean> {
+  const existing = await requireProjectTask(organizationId, projectId, taskId)
+  if (!existing) return false
+  if (existing.status !== 'cancelled') {
+    throw new Error('Status must be cancelled before this task can be deleted')
+  }
+  const [row] = await db
+    .delete(projectTasks)
+    .where(and(eq(projectTasks.id, taskId), eq(projectTasks.projectId, projectId)))
+    .returning({ id: projectTasks.id })
+  return Boolean(row)
 }
 
 function mapWorkLog(log: {
@@ -605,7 +653,7 @@ async function selectWorkLog(workLogId: string): Promise<ProjectWorkLogListItem 
 
 async function requireProjectTask(organizationId: string, projectId: string, taskId: string) {
   const [task] = await db
-    .select({ id: projectTasks.id })
+    .select({ id: projectTasks.id, status: projectTasks.status })
     .from(projectTasks)
     .innerJoin(projects, eq(projects.id, projectTasks.projectId))
     .where(
@@ -682,21 +730,33 @@ export async function createProjectWorkLog(
   await requireActiveEmployee(organizationId, input.employeeId)
   const values = workLogValues(input)
   const payroll = await getPayrollSetup(organizationId)
-  const [row] = await db
-    .insert(projectWorkLogs)
-    .values({
-      projectId,
-      projectTaskId: taskId,
-      createdBy: userId,
-      updatedBy: userId,
-      ...values,
-      maxRegularShiftHours: payroll?.maxRegularShiftHours ?? 8,
-      nsdStartTime: toPgTime(payroll?.nightShiftDifferentialStartTime ?? '22:00'),
-      nsdEndTime: toPgTime(payroll?.nightShiftDifferentialEndTime ?? '06:00'),
-    })
-    .returning({ id: projectWorkLogs.id })
-  if (!row) throw new Error('Failed to create work log')
-  const created = await selectWorkLog(row.id)
+  const workLogId = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(projectWorkLogs)
+      .values({
+        projectId,
+        projectTaskId: taskId,
+        createdBy: userId,
+        updatedBy: userId,
+        ...values,
+        maxRegularShiftHours: payroll?.maxRegularShiftHours ?? 8,
+        nsdStartTime: toPgTime(payroll?.nightShiftDifferentialStartTime ?? '22:00'),
+        nsdEndTime: toPgTime(payroll?.nightShiftDifferentialEndTime ?? '06:00'),
+      })
+      .returning({ id: projectWorkLogs.id })
+    if (!row) throw new Error('Failed to create work log')
+    if (task.status === 'pending') {
+      await tx
+        .update(projectTasks)
+        .set({
+          updatedBy: userId,
+          status: 'in_progress',
+        })
+        .where(and(eq(projectTasks.id, taskId), eq(projectTasks.projectId, projectId)))
+    }
+    return row.id
+  })
+  const created = await selectWorkLog(workLogId)
   if (!created) throw new Error('Failed to create work log')
   return created
 }

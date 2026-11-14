@@ -16,17 +16,9 @@ import {
 } from '@/components/common/form'
 import { Input } from '@/components/common/input'
 import { NumberInput } from '@/components/common/number-input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/common/select'
 import { Textarea } from '@/components/common/textarea'
 import { useUpdateProjectTask } from '@/hooks/use-projects'
 import type { ProjectTaskListItem } from '@/types/project'
-import { projectTaskStatuses } from '../data/data'
 
 const amountSchema = (label: string) =>
   z
@@ -41,7 +33,6 @@ const taskEditSchema = z
   .object({
     name: z.string().min(1, 'Name is required'),
     description: z.string().optional(),
-    status: z.enum(['pending', 'in_progress', 'completed', 'cancelled']),
     startDate: z.string().optional(),
     dueDate: z.string().optional(),
     budget: amountSchema('Budget'),
@@ -81,7 +72,6 @@ export function ProjectTaskEditForm({
     defaultValues: {
       name: task.name,
       description: task.description ?? '',
-      status: task.status,
       startDate: dateInputValue(task.plannedStartDate),
       dueDate: dateInputValue(task.plannedEndDate),
       budget: task.budget,
@@ -96,7 +86,6 @@ export function ProjectTaskEditForm({
         input: {
           name: values.name,
           description: values.description || null,
-          status: values.status,
           plannedStartDate: values.startDate || null,
           plannedEndDate: values.dueDate || null,
           budget: values.budget,
@@ -136,30 +125,6 @@ export function ProjectTaskEditForm({
                 <FormControl>
                   <Textarea {...field} rows={4} />
                 </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name='status'
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Status</FormLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <FormControl>
-                    <SelectTrigger className='w-full'>
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {projectTaskStatuses.map((status) => (
-                      <SelectItem key={status.value} value={status.value}>
-                        {status.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
                 <FormMessage />
               </FormItem>
             )}

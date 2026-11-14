@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { DotsVerticalIcon } from '@radix-ui/react-icons'
 import { format } from 'date-fns'
 import {
@@ -18,13 +18,14 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Avatar } from '@/components/common/avatar'
-import { StatusBadge } from '@/components/common/badges/status-badge'
 import { Button } from '@/components/common/button'
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/common/collapsible'
+import { getDateRangeForPreset } from '@/components/common/date-range-combobox'
+import { DateRangeFilter } from '@/components/common/date-range-filter'
 import { DeleteDialog } from '@/components/common/delete-dialog'
 import {
   DropdownMenu,
@@ -52,11 +53,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/common/table'
+import { TablePagination } from '@/components/common/table-pagination'
 import {
   TwoPaneWorkspaceLayout,
   TwoPaneWorkspaceLeftColumn,
 } from '@/components/common/two-pane-workspace'
-import { useDeleteProjectWorkLog, useProject, useUpdateProject } from '@/hooks/use-projects'
+import {
+  useDeleteProjectTask,
+  useDeleteProjectWorkLog,
+  useProject,
+  useUpdateProject,
+} from '@/hooks/use-projects'
 import { cn } from '@/lib/utils'
 import { toCurrency } from '@/lib/utils/currency'
 import { useCurrencyStore } from '@/stores/currency-store'
@@ -66,10 +73,11 @@ import {
   type ProjectTaskListItem,
   type ProjectWorkLogListItem,
 } from '@/types/project'
-import { projectStatuses, projectTaskStatuses } from '../data/data'
+import { projectStatuses } from '../data/data'
 import { ProjectEditForm } from './project-edit-form'
 import { ProjectTaskCreateForm } from './project-task-create-form'
 import { ProjectTaskEditForm } from './project-task-edit-form'
+import { ProjectTaskStatusBadge } from './project-task-status-badge'
 import { ProjectWorkLogForm } from './project-work-log-form'
 
 function errorMessage(error: unknown, fallback: string) {
@@ -308,8 +316,10 @@ function ProjectEditorSkeleton() {
 
 function TaskPanel({ projectId, task }: { projectId: string; task: ProjectTaskListItem }) {
   const description = task.description?.trim()
+  const deleteTask = useDeleteProjectTask(projectId)
   const deleteWorkLog = useDeleteProjectWorkLog(projectId)
   const [taskEditOpen, setTaskEditOpen] = useState(false)
+  const [taskDeleteOpen, setTaskDeleteOpen] = useState(false)
   const [workLogOpen, setWorkLogOpen] = useState(false)
   const [editingLog, setEditingLog] = useState<ProjectWorkLogListItem | null>(null)
   const [deletingLog, setDeletingLog] = useState<ProjectWorkLogListItem | null>(null)
@@ -327,24 +337,33 @@ function TaskPanel({ projectId, task }: { projectId: string; task: ProjectTaskLi
 
   return (
     <Collapsible className='group/task overflow-hidden rounded-md border bg-card'>
-      <CollapsibleTrigger className='flex w-full items-center gap-3 px-3 py-2.5 text-left text-sm hover:bg-muted/40'>
-        <ChevronDown className='mt-0.5 size-4 shrink-0 self-start text-muted-foreground transition-transform group-data-[state=closed]/task:-rotate-90' />
-        <span className='min-w-0 flex-1'>
-          <span className='block truncate font-medium'>{task.name}</span>
-          {description ? (
-            <span className='mt-0.5 block truncate text-muted-foreground group-data-[state=open]/task:hidden'>
-              {description}
-            </span>
-          ) : null}
-        </span>
-        <span className='shrink-0 group-data-[state=open]/task:hidden'>
-          <StatusBadge value={task.status} statusConfigs={projectTaskStatuses} />
-        </span>
-      </CollapsibleTrigger>
+      <div className='flex w-full items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted/40'>
+        <CollapsibleTrigger className='flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left'>
+          <ChevronDown className='mt-0.5 size-4 shrink-0 self-start text-muted-foreground transition-transform group-data-[state=closed]/task:-rotate-90' />
+          <span className='min-w-0 flex-1'>
+            <span className='block truncate font-medium'>{task.name}</span>
+            {description ? (
+              <span className='mt-0.5 block truncate text-muted-foreground group-data-[state=open]/task:hidden'>
+                {description}
+              </span>
+            ) : null}
+          </span>
+        </CollapsibleTrigger>
+        <div className='shrink-0 group-data-[state=open]/task:hidden'>
+          <ProjectTaskStatusBadge
+            projectId={projectId}
+            taskId={task.id}
+            status={task.status}
+            align='end'
+          />
+        </div>
+      </div>
       <CollapsibleContent className='bg-muted'>
         <TaskDetails
+          projectId={projectId}
           task={task}
           onEditTask={() => setTaskEditOpen(true)}
+          onDeleteTask={() => setTaskDeleteOpen(true)}
           onAddWorkLog={openCreate}
           onEditWorkLog={openEdit}
           onDeleteWorkLog={(log) => {
@@ -387,6 +406,17 @@ function TaskPanel({ projectId, task }: { projectId: string; task: ProjectTaskLi
           />
         </SlidePanel>
       ) : null}
+      <DeleteDialog
+        open={taskDeleteOpen}
+        onOpenChange={setTaskDeleteOpen}
+        id={task.id}
+        displayName={task.name}
+        entityName='Task'
+        entityNameLower='task'
+        onDelete={async (id) => {
+          await deleteTask.mutateAsync(id)
+        }}
+      />
       {deletingLog ? (
         <DeleteDialog
           open={deleteOpen}
@@ -410,14 +440,18 @@ function TaskPanel({ projectId, task }: { projectId: string; task: ProjectTaskLi
 }
 
 function TaskDetails({
+  projectId,
   task,
   onEditTask,
+  onDeleteTask,
   onAddWorkLog,
   onEditWorkLog,
   onDeleteWorkLog,
 }: {
+  projectId: string
   task: ProjectTaskListItem
   onEditTask: () => void
+  onDeleteTask: () => void
   onAddWorkLog: () => void
   onEditWorkLog: (log: ProjectWorkLogListItem) => void
   onDeleteWorkLog: (log: ProjectWorkLogListItem) => void
@@ -431,19 +465,14 @@ function TaskDetails({
             icon={CircleDot}
             label='Status'
             action={
-              <Button
-                type='button'
-                variant='ghost'
-                size='icon'
-                className='size-8 shrink-0 text-muted-foreground'
-                aria-label='Edit task'
-                onClick={onEditTask}
-              >
-                <Pencil />
-              </Button>
+              <TaskActions
+                canDelete={task.status === 'cancelled'}
+                onEdit={onEditTask}
+                onDelete={onDeleteTask}
+              />
             }
           >
-            <StatusBadge value={task.status} statusConfigs={projectTaskStatuses} />
+            <ProjectTaskStatusBadge projectId={projectId} taskId={task.id} status={task.status} />
           </DetailItem>
           <DetailItem icon={Calendar} label='Due date'>
             {formatDateOnly(task.plannedEndDate)}
@@ -519,6 +548,45 @@ function DetailItem({
   )
 }
 
+function TaskActions({
+  canDelete,
+  onEdit,
+  onDelete,
+}: {
+  canDelete: boolean
+  onEdit: () => void
+  onDelete: () => void
+}) {
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant='ghost'
+          className='flex size-8 shrink-0 p-0 text-muted-foreground data-[state=open]:bg-muted'
+        >
+          <DotsVerticalIcon className='h-4 w-4' />
+          <span className='sr-only'>Open menu</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align='end' className='w-[160px]'>
+        <DropdownMenuItem onClick={onEdit}>
+          <Pencil className='mr-2 h-4 w-4 flex-shrink-0' />
+          <span className='flex-1'>Edit</span>
+        </DropdownMenuItem>
+        {canDelete ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem variant='destructive' className='text-red-500!' onClick={onDelete}>
+              <Trash2 className='mr-2 h-4 w-4 flex-shrink-0' />
+              <span className='flex-1'>Delete</span>
+            </DropdownMenuItem>
+          </>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function WorkLogRowActions({
   onEdit,
   onDelete,
@@ -552,6 +620,10 @@ function WorkLogRowActions({
   )
 }
 
+function workDateKey(value: string) {
+  return value.slice(0, 10)
+}
+
 function WorkLogTable({
   logs,
   onAdd,
@@ -563,100 +635,147 @@ function WorkLogTable({
   onEdit: (log: ProjectWorkLogListItem) => void
   onDelete: (log: ProjectWorkLogListItem) => void
 }) {
-  const totalHours = logs.reduce((sum, log) => sum + Number(log.totalHours || 0), 0)
-  const totalRegular = logs.reduce((sum, log) => sum + Number(log.totalRegularHours || 0), 0)
-  const totalOvertime = logs.reduce((sum, log) => sum + Number(log.totalOvertimeHours || 0), 0)
-  const totalNight = logs.reduce(
+  const [preset, setPreset] = useState('this_week')
+  const [from, setFrom] = useState(() => getDateRangeForPreset('this_week')?.from ?? '')
+  const [to, setTo] = useState(() => getDateRangeForPreset('this_week')?.to ?? '')
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
+  const filteredLogs = useMemo(
+    () =>
+      logs.filter((log) => {
+        const date = workDateKey(log.workDate)
+        return date >= from && date <= to
+      }),
+    [logs, from, to]
+  )
+
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const pageLogs = filteredLogs.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages)
+  }, [page, totalPages])
+
+  const totalHours = filteredLogs.reduce((sum, log) => sum + Number(log.totalHours || 0), 0)
+  const totalRegular = filteredLogs.reduce((sum, log) => sum + Number(log.totalRegularHours || 0), 0)
+  const totalOvertime = filteredLogs.reduce(
+    (sum, log) => sum + Number(log.totalOvertimeHours || 0),
+    0
+  )
+  const totalNight = filteredLogs.reduce(
     (sum, log) => sum + Number(log.totalNightShiftDifferentialHours || 0),
     0
   )
-  const totalAmount = logs.reduce((sum, log) => sum + Number(log.totalAmount || 0), 0)
+  const totalAmount = filteredLogs.reduce((sum, log) => sum + Number(log.totalAmount || 0), 0)
+
+  const handleDateRangeChange = (nextPreset: string, nextFrom: string, nextTo: string) => {
+    setPreset(nextPreset)
+    setFrom(nextFrom)
+    setTo(nextTo)
+    setPage(1)
+  }
 
   return (
-    <div className='overflow-x-auto'>
-      <Table className='[&_td]:px-4 [&_td]:py-3 [&_th]:bg-[color-mix(in_oklch,var(--muted),var(--foreground)_10%)] [&_th]:px-4 [&_th]:py-3 dark:[&_th]:bg-[color-mix(in_oklch,var(--card),var(--muted)_45%)]'>
-        <TableHeader>
-          <TableRow className='hover:bg-transparent'>
-            <TableHead>Employee</TableHead>
-            <TableHead>Work date</TableHead>
-            <TableHead>Time in</TableHead>
-            <TableHead>Time out</TableHead>
-            <TableHead>Notes</TableHead>
-            <TableHead className='text-right'>Rate</TableHead>
-            <TableHead className='text-right'>Break (min)</TableHead>
-            <TableHead className='text-right'>Hours</TableHead>
-            <TableHead className='text-right'>Regular</TableHead>
-            <TableHead className='text-right'>OT</TableHead>
-            <TableHead className='text-right'>Night</TableHead>
-            <TableHead className='text-right'>Amount</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {logs.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={12} className='text-muted-foreground'>
-                No work logs
-              </TableCell>
+    <div>
+      <div className='flex items-center justify-between gap-2 border-b px-4 py-3'>
+        <DateRangeFilter
+          value={preset}
+          from={from}
+          to={to}
+          onDateRangeChange={handleDateRangeChange}
+        />
+        <Button type='button' size='sm' className='shrink-0' onClick={onAdd}>
+          <Plus className='size-4' />
+          Add work log
+        </Button>
+      </div>
+      <div className='overflow-x-auto'>
+        <Table className='[&_td]:px-4 [&_td]:py-3 [&_th]:bg-[color-mix(in_oklch,var(--muted),var(--foreground)_10%)] [&_th]:px-4 [&_th]:py-3 dark:[&_th]:bg-[color-mix(in_oklch,var(--card),var(--muted)_45%)]'>
+          <TableHeader>
+            <TableRow className='hover:bg-transparent'>
+              <TableHead>Employee</TableHead>
+              <TableHead>Work date</TableHead>
+              <TableHead>Time in</TableHead>
+              <TableHead>Time out</TableHead>
+              <TableHead>Notes</TableHead>
+              <TableHead className='text-right'>Rate</TableHead>
+              <TableHead className='text-right'>Break (min)</TableHead>
+              <TableHead className='text-right'>Hours</TableHead>
+              <TableHead className='text-right'>Regular</TableHead>
+              <TableHead className='text-right'>OT</TableHead>
+              <TableHead className='text-right'>Night</TableHead>
+              <TableHead className='text-right'>Amount</TableHead>
             </TableRow>
-          ) : (
-            logs.map((log) => (
-              <TableRow key={log.id}>
-                <TableCell>
-                  <div className='flex w-full items-center gap-2.5'>
-                    <Avatar src={log.employeeImageUrl} name={log.employeeName} size={32} square />
-                    <div className='min-w-0 flex-1'>
-                      <div className='truncate font-medium'>{log.employeeName}</div>
-                      <div className='truncate text-xs text-muted-foreground'>{log.employeeCode}</div>
-                    </div>
-                    <WorkLogRowActions onEdit={() => onEdit(log)} onDelete={() => onDelete(log)} />
-                  </div>
+          </TableHeader>
+          <TableBody>
+            {pageLogs.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={12} className='text-muted-foreground'>
+                  No work logs
                 </TableCell>
-                <TableCell>{formatDateOnly(log.workDate)}</TableCell>
-                <TableCell>{formatDateTime(log.startDatetime)}</TableCell>
-                <TableCell>{formatDateTime(log.endDatetime)}</TableCell>
-                <TableCell className='whitespace-normal'>{log.notes || '-'}</TableCell>
-                <TableCell className='text-right tabular-nums'>{money(Number(log.hourlyRate))}</TableCell>
-                <TableCell className='text-right tabular-nums'>{log.breakMinutes}</TableCell>
-                <TableCell className='text-right tabular-nums'>{log.totalHours}</TableCell>
-                <TableCell className='text-right tabular-nums'>{log.totalRegularHours}</TableCell>
-                <TableCell className='text-right tabular-nums'>{log.totalOvertimeHours}</TableCell>
-                <TableCell className='text-right tabular-nums'>
-                  {log.totalNightShiftDifferentialHours}
-                </TableCell>
-                <TableCell className='text-right tabular-nums'>{money(Number(log.totalAmount))}</TableCell>
               </TableRow>
-            ))
-          )}
-        </TableBody>
-        <TableFooter className='bg-transparent'>
-          {logs.length > 0 ? (
-            <TableRow>
-              <TableCell colSpan={5} className='text-right'>
-                Total
-              </TableCell>
-              <TableCell />
-              <TableCell />
-              <TableCell className='text-right tabular-nums'>{totalHours.toFixed(2)}</TableCell>
-              <TableCell className='text-right tabular-nums'>{totalRegular.toFixed(2)}</TableCell>
-              <TableCell className='text-right tabular-nums'>{totalOvertime.toFixed(2)}</TableCell>
-              <TableCell className='text-right tabular-nums'>{totalNight.toFixed(2)}</TableCell>
-              <TableCell className='text-right tabular-nums'>{money(totalAmount)}</TableCell>
-            </TableRow>
+            ) : (
+              pageLogs.map((log) => (
+                <TableRow key={log.id}>
+                  <TableCell>
+                    <div className='flex w-full items-center gap-2.5'>
+                      <Avatar src={log.employeeImageUrl} name={log.employeeName} size={32} square />
+                      <div className='min-w-0 flex-1'>
+                        <div className='truncate font-medium'>{log.employeeName}</div>
+                        <div className='truncate text-xs text-muted-foreground'>{log.employeeCode}</div>
+                      </div>
+                      <WorkLogRowActions onEdit={() => onEdit(log)} onDelete={() => onDelete(log)} />
+                    </div>
+                  </TableCell>
+                  <TableCell>{formatDateOnly(log.workDate)}</TableCell>
+                  <TableCell>{formatDateTime(log.startDatetime)}</TableCell>
+                  <TableCell>{formatDateTime(log.endDatetime)}</TableCell>
+                  <TableCell className='whitespace-normal'>{log.notes || '-'}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{money(Number(log.hourlyRate))}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{log.breakMinutes}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{log.totalHours}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{log.totalRegularHours}</TableCell>
+                  <TableCell className='text-right tabular-nums'>{log.totalOvertimeHours}</TableCell>
+                  <TableCell className='text-right tabular-nums'>
+                    {log.totalNightShiftDifferentialHours}
+                  </TableCell>
+                  <TableCell className='text-right tabular-nums'>{money(Number(log.totalAmount))}</TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+          {filteredLogs.length > 0 ? (
+            <TableFooter className='bg-transparent'>
+              <TableRow>
+                <TableCell colSpan={5} className='text-right'>
+                  Total
+                </TableCell>
+                <TableCell />
+                <TableCell />
+                <TableCell className='text-right tabular-nums'>{totalHours.toFixed(2)}</TableCell>
+                <TableCell className='text-right tabular-nums'>{totalRegular.toFixed(2)}</TableCell>
+                <TableCell className='text-right tabular-nums'>{totalOvertime.toFixed(2)}</TableCell>
+                <TableCell className='text-right tabular-nums'>{totalNight.toFixed(2)}</TableCell>
+                <TableCell className='text-right tabular-nums'>{money(totalAmount)}</TableCell>
+              </TableRow>
+            </TableFooter>
           ) : null}
-          <TableRow className='hover:bg-transparent'>
-            <TableCell colSpan={12} className='!p-0'>
-              <button
-                type='button'
-                onClick={onAdd}
-                className='flex w-full items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-primary hover:bg-primary/5'
-              >
-                <Plus className='size-4' />
-                Add work log
-              </button>
-            </TableCell>
-          </TableRow>
-        </TableFooter>
-      </Table>
+        </Table>
+      </div>
+      <div className='border-t px-2 py-3'>
+        <TablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          onPageChange={setPage}
+          onPageSizeChange={(nextPageSize) => {
+            setPageSize(nextPageSize)
+            setPage(1)
+          }}
+        />
+      </div>
     </div>
   )
 }

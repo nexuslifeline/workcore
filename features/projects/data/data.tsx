@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   Circle,
   CircleDashed,
+  PauseCircle,
   PlayCircle,
   XCircle,
 } from 'lucide-react'
@@ -60,6 +61,13 @@ export const projectTaskStatuses: StatusConfig[] = [
     icon: PlayCircle,
     colorClasses:
       'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 dark:border-amber-500/30',
+  },
+  {
+    value: 'paused',
+    label: 'Paused',
+    icon: PauseCircle,
+    colorClasses:
+      'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/20 dark:border-violet-500/30',
   },
   {
     value: 'completed',

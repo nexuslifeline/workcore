@@ -6,16 +6,11 @@ import {
   resolveRequestContext,
   validateRequestContext,
 } from '@/services/server/organizations/organization-service'
-import { updateProjectTask } from '@/services/server/projects/project-service'
-import { PROJECT_TASK_STATUSES, type ProjectTaskStatus } from '@/types/project'
+import { deleteProjectTask, updateProjectTask } from '@/services/server/projects/project-service'
 
 function parseUpdateBody(body: Record<string, unknown>) {
   const name = typeof body.name === 'string' ? body.name.trim() : ''
   if (!name) return { error: 'Task name is required' as const }
-  const status = typeof body.status === 'string' ? body.status : ''
-  if (!PROJECT_TASK_STATUSES.includes(status as ProjectTaskStatus)) {
-    return { error: 'Status is not valid' as const }
-  }
   if (body.budget != null && typeof body.budget !== 'string' && typeof body.budget !== 'number') {
     return { error: 'Budget is required' as const }
   }
@@ -36,7 +31,6 @@ function parseUpdateBody(body: Record<string, unknown>) {
         body.estimatedHours == null || body.estimatedHours === '' ? '0' : String(body.estimatedHours),
       plannedStartDate: text(body.plannedStartDate),
       plannedEndDate: text(body.plannedEndDate),
-      status: status as ProjectTaskStatus,
     },
   }
 }
@@ -70,5 +64,23 @@ export async function PATCH(
     if (error instanceof NextResponse) return error
     if (isTaskInputError(error)) return badRequestResponse(error.message)
     return errorResponse('Failed to update task', 500, error)
+  }
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string; taskId: string }> }
+) {
+  try {
+    const { id, taskId } = await params
+    const ctx = validateRequestContext(await resolveRequestContext(request))
+    validatePermissions(await resolvePermissions(ctx), PERMISSIONS.PROJECTS)
+    const deleted = await deleteProjectTask(ctx.organization.id, id, taskId)
+    if (!deleted) return notFoundResponse('Task not found')
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    if (error instanceof NextResponse) return error
+    if (isTaskInputError(error)) return badRequestResponse(error.message)
+    return errorResponse('Failed to delete task', 500, error)
   }
 }

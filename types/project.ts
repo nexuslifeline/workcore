@@ -1,13 +1,22 @@
 export type ProjectStatus = 'draft' | 'approved' | 'in_progress' | 'cancelled' | 'completed'
 
-export type ProjectTaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled'
+export type ProjectTaskStatus = 'pending' | 'in_progress' | 'paused' | 'completed' | 'cancelled'
 
 export const PROJECT_TASK_STATUSES: ProjectTaskStatus[] = [
   'pending',
   'in_progress',
+  'paused',
   'completed',
   'cancelled',
 ]
+
+export const PROJECT_TASK_STATUS_TRANSITIONS: Record<ProjectTaskStatus, ProjectTaskStatus[]> = {
+  pending: ['in_progress', 'completed', 'cancelled'],
+  in_progress: ['pending', 'paused', 'completed', 'cancelled'],
+  paused: ['pending', 'in_progress', 'cancelled'],
+  completed: [],
+  cancelled: [],
+}
 
 export const PROJECT_STATUSES: ProjectStatus[] = [
   'draft',
@@ -31,7 +40,6 @@ export type ProjectTaskUpdateInput = {
   estimatedHours: string
   plannedStartDate?: string | null
   plannedEndDate?: string | null
-  status: ProjectTaskStatus
 }
 
 export type ProjectWorkLogInput = {
