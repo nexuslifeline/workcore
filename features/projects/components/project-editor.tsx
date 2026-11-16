@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { DotsVerticalIcon } from '@radix-ui/react-icons'
 import { format } from 'date-fns'
 import {
@@ -44,6 +44,7 @@ import {
   SelectValue,
 } from '@/components/common/select'
 import { SlidePanel } from '@/components/common/slide-panel'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/common/tabs'
 import {
   Table,
   TableBody,
@@ -111,8 +112,27 @@ export function ProjectEditor({ projectId }: { projectId: string }) {
   const updateProject = useUpdateProject()
   const [editOpen, setEditOpen] = useState(false)
   const [taskOpen, setTaskOpen] = useState(false)
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
+  const previousTaskIdsRef = useRef<string[]>([])
   const project = data?.project
   const tasks = data?.tasks ?? []
+  const taskIdsKey = tasks.map((task) => task.id).join('\0')
+
+  useEffect(() => {
+    const ids = taskIdsKey ? taskIdsKey.split('\0') : []
+    const previousIds = previousTaskIdsRef.current
+    previousTaskIdsRef.current = ids
+
+    if (activeTaskId && ids.includes(activeTaskId)) return
+
+    const removed = Boolean(
+      activeTaskId && previousIds.includes(activeTaskId) && !ids.includes(activeTaskId)
+    )
+
+    if (!activeTaskId || removed) {
+      setActiveTaskId(ids[0] ?? null)
+    }
+  }, [taskIdsKey, activeTaskId])
 
   const planned = Number(project?.budget ?? 0)
   const spent = Number(project?.spent ?? 0)
@@ -142,7 +162,22 @@ export function ProjectEditor({ projectId }: { projectId: string }) {
   return (
     <TwoPaneWorkspaceLayout
       title={project?.name || 'Project'}
-      description={project ? `By ${project.createdByName?.trim() || 'Unknown'}` : undefined}
+      description={
+        project ? (
+          <span className='inline-flex items-center gap-1.5'>
+            <span>Supervisor</span>
+            <Avatar
+              src={project.supervisorImageUrl}
+              name={project.supervisorName?.trim() || 'Supervisor'}
+              size={20}
+              square
+            />
+            <span className='font-medium text-foreground'>
+              {project.supervisorName?.trim() || 'Unassigned'}
+            </span>
+          </span>
+        ) : undefined
+      }
       backUrl='/projects'
       collapseSidebar={false}
       headerActions={
@@ -217,25 +252,51 @@ export function ProjectEditor({ projectId }: { projectId: string }) {
                 </div>
               </div>
 
-              <button
-                type='button'
-                onClick={() => setTaskOpen(true)}
-                className='flex w-full items-center justify-center gap-2 rounded-lg border-2 border-dashed bg-primary/5 px-4 py-3 text-sm font-medium text-primary transition-colors hover:bg-primary/10'
-              >
-                <Plus className='size-4' />
-                Add task
-              </button>
-
-              <section className='space-y-3'>
-                <h2 className='text-base font-semibold'>Tasks</h2>
-                {tasks.length > 0 ? (
-                  <div className='space-y-3'>
-                    {tasks.map((task) => (
-                      <TaskPanel key={task.id} projectId={project.id} task={task} />
-                    ))}
+              {tasks.length === 0 ? (
+                <div className='flex flex-col items-center justify-center gap-3 rounded-lg border border-dashed px-4 py-10 text-center'>
+                  <div className='space-y-1'>
+                    <p className='text-sm text-muted-foreground'>No tasks added yet.</p>
+                    <p className='text-sm text-muted-foreground'>
+                      Add a task to plan the schedule, budget, and hours.
+                    </p>
                   </div>
-                ) : null}
-              </section>
+                  <Button type='button' variant='outline' onClick={() => setTaskOpen(true)}>
+                    <Plus className='size-4' />
+                    Add task
+                  </Button>
+                </div>
+              ) : (
+                <Tabs
+                  value={
+                    activeTaskId && tasks.some((task) => task.id === activeTaskId)
+                      ? activeTaskId
+                      : (tasks[0]?.id ?? '')
+                  }
+                  onValueChange={setActiveTaskId}
+                  className='gap-4'
+                >
+                  <TabsList className='w-full min-w-0 gap-0 overflow-x-auto'>
+                    {tasks.map((task) => (
+                      <TabsTrigger key={task.id} value={task.id} className='max-w-56 shrink-0'>
+                        <span className='truncate'>{task.name}</span>
+                      </TabsTrigger>
+                    ))}
+                    <button
+                      type='button'
+                      onClick={() => setTaskOpen(true)}
+                      className='relative inline-flex shrink-0 items-center justify-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground'
+                    >
+                      <Plus className='size-4' />
+                      Add task
+                    </button>
+                  </TabsList>
+                  {tasks.map((task) => (
+                    <TabsContent key={task.id} value={task.id}>
+                      <TaskPanel projectId={project.id} task={task} />
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              )}
           </div>
         )}
       </TwoPaneWorkspaceLeftColumn>
@@ -248,7 +309,11 @@ export function ProjectEditor({ projectId }: { projectId: string }) {
           className='w-full sm:max-w-xl'
           contentClassName='flex flex-col overflow-hidden p-0 min-h-0'
         >
-          <ProjectTaskCreateForm projectId={project.id} onClose={() => setTaskOpen(false)} />
+          <ProjectTaskCreateForm
+            projectId={project.id}
+            onClose={() => setTaskOpen(false)}
+            onCreated={(taskId) => setActiveTaskId(taskId)}
+          />
         </SlidePanel>
       ) : null}
       {project && editOpen ? (
@@ -295,27 +360,19 @@ function ProjectEditorSkeleton() {
           ))}
         </div>
       </div>
-      <section className='space-y-3'>
-        <Skeleton className='h-5 w-16' />
-        <div className='space-y-3'>
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className='flex items-center gap-3 rounded-md border px-3 py-3'>
-              <Skeleton className='size-4 shrink-0 rounded-sm' />
-              <div className='space-y-2'>
-                <Skeleton className='h-4 w-40' />
-                <Skeleton className='h-3 w-64' />
-              </div>
-              <Skeleton className='ms-auto h-5 w-20 rounded-full' />
-            </div>
-          ))}
+      <div className='space-y-4'>
+        <div className='flex gap-2 border-b pb-3'>
+          <Skeleton className='h-5 w-28' />
+          <Skeleton className='h-5 w-24' />
+          <Skeleton className='h-5 w-20' />
         </div>
-      </section>
+        <Skeleton className='h-40 w-full' />
+      </div>
     </div>
   )
 }
 
 function TaskPanel({ projectId, task }: { projectId: string; task: ProjectTaskListItem }) {
-  const description = task.description?.trim()
   const deleteTask = useDeleteProjectTask(projectId)
   const deleteWorkLog = useDeleteProjectWorkLog(projectId)
   const [taskEditOpen, setTaskEditOpen] = useState(false)
@@ -336,42 +393,19 @@ function TaskPanel({ projectId, task }: { projectId: string; task: ProjectTaskLi
   }
 
   return (
-    <Collapsible className='group/task overflow-hidden rounded-md border bg-card'>
-      <div className='flex w-full items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted/40'>
-        <CollapsibleTrigger className='flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left'>
-          <ChevronDown className='mt-0.5 size-4 shrink-0 self-start text-muted-foreground transition-transform group-data-[state=closed]/task:-rotate-90' />
-          <span className='min-w-0 flex-1'>
-            <span className='block truncate font-medium'>{task.name}</span>
-            {description ? (
-              <span className='mt-0.5 block truncate text-muted-foreground group-data-[state=open]/task:hidden'>
-                {description}
-              </span>
-            ) : null}
-          </span>
-        </CollapsibleTrigger>
-        <div className='shrink-0 group-data-[state=open]/task:hidden'>
-          <ProjectTaskStatusBadge
-            projectId={projectId}
-            taskId={task.id}
-            status={task.status}
-            align='end'
-          />
-        </div>
-      </div>
-      <CollapsibleContent className='bg-muted'>
-        <TaskDetails
-          projectId={projectId}
-          task={task}
-          onEditTask={() => setTaskEditOpen(true)}
-          onDeleteTask={() => setTaskDeleteOpen(true)}
-          onAddWorkLog={openCreate}
-          onEditWorkLog={openEdit}
-          onDeleteWorkLog={(log) => {
-            setDeletingLog(log)
-            setDeleteOpen(true)
-          }}
-        />
-      </CollapsibleContent>
+    <>
+      <TaskDetails
+        projectId={projectId}
+        task={task}
+        onEditTask={() => setTaskEditOpen(true)}
+        onDeleteTask={() => setTaskDeleteOpen(true)}
+        onAddWorkLog={openCreate}
+        onEditWorkLog={openEdit}
+        onDeleteWorkLog={(log) => {
+          setDeletingLog(log)
+          setDeleteOpen(true)
+        }}
+      />
       {taskEditOpen ? (
         <SlidePanel
           open={taskEditOpen}
@@ -435,7 +469,7 @@ function TaskPanel({ projectId, task }: { projectId: string; task: ProjectTaskLi
           }}
         />
       ) : null}
-    </Collapsible>
+    </>
   )
 }
 
@@ -458,7 +492,7 @@ function TaskDetails({
 }) {
   const description = task.description?.trim()
   return (
-    <div className='space-y-4 px-3 py-3'>
+    <div className='space-y-4'>
       <TaskSection title='Details'>
         <dl className='grid grid-cols-1 text-sm sm:grid-cols-2'>
           <DetailItem
