@@ -14,13 +14,23 @@ function parseCreateBody(body: Record<string, unknown>) {
   if (body.budget != null && typeof body.budget !== 'string' && typeof body.budget !== 'number') {
     return { error: 'Budget is required' as const }
   }
+  if (
+    body.estimatedHours != null &&
+    typeof body.estimatedHours !== 'string' &&
+    typeof body.estimatedHours !== 'number'
+  ) {
+    return { error: 'Estimated hours is required' as const }
+  }
   const text = (value: unknown) => (typeof value === 'string' ? value : null)
   return {
     input: {
       name,
       description: text(body.description),
       dueDate: text(body.dueDate),
+      plannedStartDate: text(body.plannedStartDate),
       budget: body.budget == null || body.budget === '' ? '0' : String(body.budget),
+      estimatedHours:
+        body.estimatedHours == null || body.estimatedHours === '' ? '0' : String(body.estimatedHours),
     },
   }
 }
@@ -43,7 +53,10 @@ export async function POST(
     if (error instanceof NextResponse) return error
     if (
       error instanceof Error &&
-      (error.message.startsWith('Dates') || error.message.startsWith('Budget'))
+      (error.message.startsWith('Dates') ||
+        error.message.startsWith('Budget') ||
+        error.message.startsWith('Estimated hours') ||
+        error.message.startsWith('Due date'))
     ) {
       return badRequestResponse(error.message)
     }

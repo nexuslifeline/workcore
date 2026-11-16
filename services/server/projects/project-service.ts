@@ -470,6 +470,12 @@ export async function createProjectTask(
     .limit(1)
   if (!project) return null
 
+  const plannedStartDate = parseDate(input.plannedStartDate)
+  const plannedEndDate = parseDate(input.dueDate)
+  if (plannedStartDate && plannedEndDate && plannedEndDate < plannedStartDate) {
+    throw new Error('Due date must be on or after the start date')
+  }
+
   const [row] = await db
     .insert(projectTasks)
     .values({
@@ -477,7 +483,12 @@ export async function createProjectTask(
       name: input.name.trim(),
       description: blankToNull(input.description),
       budget: parseBudget(input.budget?.trim() ? input.budget : '0'),
-      plannedEndDate: parseDate(input.dueDate),
+      estimatedHours: parseAmount(
+        input.estimatedHours?.trim() ? input.estimatedHours : '0',
+        'Estimated hours'
+      ),
+      plannedStartDate,
+      plannedEndDate,
       status: 'pending',
       createdBy: userId,
       updatedBy: userId,

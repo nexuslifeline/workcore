@@ -30,6 +30,8 @@ export type ProjectTaskCreateInput = {
   name: string
   description?: string | null
   budget?: string | null
+  estimatedHours?: string | null
+  plannedStartDate?: string | null
   dueDate?: string | null
 }
 

@@ -19,18 +19,28 @@ import { NumberInput } from '@/components/common/number-input'
 import { Textarea } from '@/components/common/textarea'
 import { useCreateProjectTask } from '@/hooks/use-projects'
 
-const taskCreateSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  description: z.string().optional(),
-  dueDate: z.string().optional(),
-  budget: z
+const amountSchema = (label: string) =>
+  z
     .string()
-    .min(1, 'Budget is required')
+    .min(1, `${label} is required`)
     .refine((value) => {
       const num = Number(value)
       return Number.isFinite(num) && num >= 0
-    }, 'Budget must be zero or more'),
-})
+    }, `${label} must be zero or more`)
+
+const taskCreateSchema = z
+  .object({
+    name: z.string().min(1, 'Name is required'),
+    description: z.string().optional(),
+    startDate: z.string().optional(),
+    dueDate: z.string().optional(),
+    budget: amountSchema('Budget'),
+    estimatedHours: amountSchema('Estimated hours'),
+  })
+  .refine((values) => !values.startDate || !values.dueDate || values.dueDate >= values.startDate, {
+    path: ['dueDate'],
+    message: 'Due date must be on or after the start date',
+  })
 
 type TaskCreateValues = z.infer<typeof taskCreateSchema>
 
@@ -45,9 +55,11 @@ function errorMessage(error: unknown, fallback: string) {
 export function ProjectTaskCreateForm({
   projectId,
   onClose,
+  onCreated,
 }: {
   projectId: string
   onClose: () => void
+  onCreated?: (taskId: string) => void
 }) {
   const createTask = useCreateProjectTask(projectId)
   const form = useForm<TaskCreateValues>({
@@ -55,20 +67,25 @@ export function ProjectTaskCreateForm({
     defaultValues: {
       name: '',
       description: '',
+      startDate: '',
       dueDate: '',
       budget: '0.00',
+      estimatedHours: '0.00',
     },
   })
 
   const onSubmit = async (values: TaskCreateValues) => {
     try {
-      await createTask.mutateAsync({
+      const created = await createTask.mutateAsync({
         name: values.name,
         description: values.description || null,
+        plannedStartDate: values.startDate || null,
         dueDate: values.dueDate || null,
         budget: values.budget,
+        estimatedHours: values.estimatedHours,
       })
       toast.success('Task created')
+      onCreated?.(created.id)
       onClose()
     } catch (error) {
       toast.error(errorMessage(error, 'Failed to create task'))
@@ -107,6 +124,19 @@ export function ProjectTaskCreateForm({
           />
           <FormField
             control={form.control}
+            name='startDate'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Start date</FormLabel>
+                <FormControl>
+                  <Input type='date' {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
             name='dueDate'
             render={({ field }) => (
               <FormItem>
@@ -124,6 +154,25 @@ export function ProjectTaskCreateForm({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Budget</FormLabel>
+                <FormControl>
+                  <NumberInput
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    decimalScale={2}
+                    fixedDecimalScale
+                    thousandSeparator
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name='estimatedHours'
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Estimated hours</FormLabel>
                 <FormControl>
                   <NumberInput
                     value={field.value}
