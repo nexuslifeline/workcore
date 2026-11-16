@@ -8,7 +8,7 @@ import { Button } from '@/components/common/button'
 export type TwoPaneWorkspaceTopBarProps = {
   backUrl: string
   title: string
-  description?: string
+  description?: ReactNode
   headerActions?: ReactNode
 }
 

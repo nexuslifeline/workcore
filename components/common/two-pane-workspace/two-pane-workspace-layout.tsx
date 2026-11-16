@@ -9,7 +9,7 @@ export type TwoPaneWorkspaceLayoutProps = {
   /** Main header title */
   title: string
   /** Main header description (below title) */
-  description?: string
+  description?: ReactNode
   /** Action buttons in the main header (e.g. Save, Cancel) */
   headerActions?: ReactNode
   /** URL for the back button navigation */
