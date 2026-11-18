@@ -10,6 +10,7 @@ import {
   Languages,
   Globe2,
   Banknote,
+  CalendarDays,
 } from 'lucide-react'
 import type { JSX } from 'react'
 import { PERMISSIONS } from '@/lib/constants/permission-codes'
@@ -68,6 +69,12 @@ export const payrollSidebarItems: SidebarNavItem[] = [
     title: 'Payroll',
     href: '/settings/payroll',
     icon: <Banknote size={18} />,
+  },
+  {
+    code: PERMISSIONS.SETTINGS_PAYROLL,
+    title: 'Holidays',
+    href: '/settings/payroll/holidays',
+    icon: <CalendarDays size={18} />,
   },
 ]
 
