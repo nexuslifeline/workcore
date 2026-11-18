@@ -11,6 +11,7 @@ import { internalUserRoles } from "./internal-user-roles";
 import { invitations } from "./invitations";
 import { organizationUsers } from "./organization-users";
 import { organizations } from "./organizations";
+import { holidays } from "./holidays";
 import { payrollSetup } from "./payroll-setup";
 import { permissions } from "./permissions";
 import { profiles } from "./profiles";
@@ -28,6 +29,7 @@ export const organizationsRelations = relations(organizations, ({ many, one }) =
         fields: [organizations.id],
         references: [payrollSetup.organizationId],
     }),
+    holidays: many(holidays),
 }));
 
 export const organizationUsersRelations = relations(organizationUsers, ({ one }) => ({
@@ -88,6 +90,23 @@ export const internalUserRolesRelations = relations(internalUserRoles, ({ one })
     user: one(authUsers, {
         fields: [internalUserRoles.userId],
         references: [authUsers.id],
+    }),
+}));
+
+export const holidaysRelations = relations(holidays, ({ one }) => ({
+    organization: one(organizations, {
+        fields: [holidays.organizationId],
+        references: [organizations.id],
+    }),
+    createdByUser: one(authUsers, {
+        fields: [holidays.createdBy],
+        references: [authUsers.id],
+        relationName: "holidayCreatedBy",
+    }),
+    updatedByUser: one(authUsers, {
+        fields: [holidays.updatedBy],
+        references: [authUsers.id],
+        relationName: "holidayUpdatedBy",
     }),
 }));
 

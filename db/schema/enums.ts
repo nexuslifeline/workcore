@@ -50,3 +50,8 @@ export const projectTaskStatusEnum = pgEnum("project_task_status", [
     "completed",
     "cancelled",
 ]);
+
+export const holidayTypeEnum = pgEnum("holiday_type", [
+    "regular_holiday",
+    "special_holiday",
+]);
