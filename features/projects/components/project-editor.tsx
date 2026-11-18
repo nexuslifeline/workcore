@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { DotsVerticalIcon } from '@radix-ui/react-icons'
 import { format } from 'date-fns'
 import {
@@ -108,31 +109,85 @@ function money(amount: number) {
 }
 
 export function ProjectEditor({ projectId }: { projectId: string }) {
+  const pathname = usePathname()
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const { data, isLoading, error } = useProject(projectId)
   const updateProject = useUpdateProject()
   const [editOpen, setEditOpen] = useState(false)
   const [taskOpen, setTaskOpen] = useState(false)
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null)
   const previousTaskIdsRef = useRef<string[]>([])
+  const pendingTaskNameRef = useRef<string | null | undefined>(undefined)
   const project = data?.project
   const tasks = data?.tasks ?? []
   const taskIdsKey = tasks.map((task) => task.id).join('\0')
+  const taskNamesKey = tasks.map((task) => task.name).join('\0')
+  const taskParam = searchParams.get('task')
+  const searchParamsString = searchParams.toString()
+
+  const writeTaskParam = useCallback(
+    (name: string | null) => {
+      const params = new URLSearchParams(searchParamsString)
+      const current = params.has('task') ? params.get('task') : null
+      if (current === name || pendingTaskNameRef.current === name) return
+      pendingTaskNameRef.current = name
+      if (name) params.set('task', name)
+      else params.delete('task')
+      const query = params.toString()
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+    },
+    [pathname, router, searchParamsString]
+  )
 
   useEffect(() => {
+    if ((taskParam ?? null) === (pendingTaskNameRef.current ?? null)) {
+      pendingTaskNameRef.current = undefined
+    }
+    if (isLoading || !data) return
+
     const ids = taskIdsKey ? taskIdsKey.split('\0') : []
     const previousIds = previousTaskIdsRef.current
     previousTaskIdsRef.current = ids
 
-    if (activeTaskId && ids.includes(activeTaskId)) return
-
+    const taskFromUrl = taskParam ? tasks.find((task) => task.name === taskParam) : undefined
+    const selectedStillExists = Boolean(activeTaskId && ids.includes(activeTaskId))
     const removed = Boolean(
       activeTaskId && previousIds.includes(activeTaskId) && !ids.includes(activeTaskId)
     )
+    const pendingCreate = Boolean(activeTaskId && !selectedStillExists && !removed)
 
-    if (!activeTaskId || removed) {
-      setActiveTaskId(ids[0] ?? null)
+    if (pendingCreate) return
+
+    const nextId = selectedStillExists
+      ? activeTaskId
+      : removed
+        ? (ids[0] ?? null)
+        : (taskFromUrl?.id ?? ids[0] ?? null)
+    if (nextId !== activeTaskId) setActiveTaskId(nextId)
+
+    const selected = tasks.find((task) => task.id === nextId)
+    if (!selected) {
+      if (taskParam) writeTaskParam(null)
+      return
     }
-  }, [taskIdsKey, activeTaskId])
+    if (taskParam !== selected.name) writeTaskParam(selected.name)
+  }, [
+    activeTaskId,
+    data,
+    isLoading,
+    taskIdsKey,
+    taskNamesKey,
+    taskParam,
+    tasks,
+    writeTaskParam,
+  ])
+
+  const selectTask = (taskId: string) => {
+    setActiveTaskId(taskId)
+    const task = tasks.find((item) => item.id === taskId)
+    if (task) writeTaskParam(task.name)
+  }
 
   const planned = Number(project?.budget ?? 0)
   const spent = Number(project?.spent ?? 0)
@@ -272,7 +327,7 @@ export function ProjectEditor({ projectId }: { projectId: string }) {
                       ? activeTaskId
                       : (tasks[0]?.id ?? '')
                   }
-                  onValueChange={setActiveTaskId}
+                  onValueChange={selectTask}
                   className='gap-4'
                 >
                   <TabsList className='w-full min-w-0 gap-0 overflow-x-auto'>
@@ -312,7 +367,7 @@ export function ProjectEditor({ projectId }: { projectId: string }) {
           <ProjectTaskCreateForm
             projectId={project.id}
             onClose={() => setTaskOpen(false)}
-            onCreated={(taskId) => setActiveTaskId(taskId)}
+            onCreated={selectTask}
           />
         </SlidePanel>
       ) : null}
