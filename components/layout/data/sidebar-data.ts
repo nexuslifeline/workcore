@@ -13,6 +13,7 @@ import {
   Shield,
   IdCard,
   FolderKanban,
+  Truck,
 } from 'lucide-react'
 import { type SidebarData } from '../types'
 import { PERMISSIONS } from '@/lib/constants/permission-codes'
@@ -61,6 +62,12 @@ export const sidebarData: SidebarData = {
           title: 'Projects',
           url: '/projects',
           icon: FolderKanban,
+        },
+        {
+          code: PERMISSIONS.VEHICLES,
+          title: 'Vehicles',
+          url: '/vehicles',
+          icon: Truck,
         },
       ],
     },
