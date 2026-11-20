@@ -51,6 +51,13 @@ export const projectTaskStatusEnum = pgEnum("project_task_status", [
     "cancelled",
 ]);
 
+export const driverRouteLogStatusEnum = pgEnum("driver_route_log_status", [
+    "scheduled",
+    "in_transit",
+    "completed",
+    "cancelled",
+]);
+
 export const holidayTypeEnum = pgEnum("holiday_type", [
     "regular_holiday",
     "special_holiday",

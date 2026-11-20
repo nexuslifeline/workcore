@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import { appNotificationReads, appNotifications } from "./app-notifications";
 import { authUsers } from "./auth-users";
+import { driverRouteLogs } from "./driver-route-logs";
 import { employees } from "./employees";
 import { projectExpenses } from "./project-expenses";
 import { projectTaskAssignees } from "./project-task-assignees";
@@ -17,6 +18,7 @@ import { permissions } from "./permissions";
 import { profiles } from "./profiles";
 import { rolePermissions } from "./role-permissions";
 import { roles } from "./roles";
+import { vehicles } from "./vehicles";
 
 export const organizationsRelations = relations(organizations, ({ many, one }) => ({
     users: many(organizationUsers),
@@ -24,6 +26,8 @@ export const organizationsRelations = relations(organizations, ({ many, one }) =
     roles: many(roles),
     employees: many(employees),
     projects: many(projects),
+    vehicles: many(vehicles),
+    driverRouteLogs: many(driverRouteLogs),
     appNotifications: many(appNotifications),
     payrollSetup: one(payrollSetup, {
         fields: [organizations.id],
@@ -124,7 +128,41 @@ export const employeesRelations = relations(employees, ({ one, many }) => ({
     }),
     taskAssignments: many(projectTaskAssignees),
     workLogs: many(projectWorkLogs),
+    driverRouteLogs: many(driverRouteLogs),
     supervisedProjects: many(projects, { relationName: "projectSupervisor" }),
+}));
+
+export const vehiclesRelations = relations(vehicles, ({ one, many }) => ({
+    organization: one(organizations, {
+        fields: [vehicles.organizationId],
+        references: [organizations.id],
+    }),
+    driverRouteLogs: many(driverRouteLogs),
+    createdByUser: one(authUsers, {
+        fields: [vehicles.createdBy],
+        references: [authUsers.id],
+        relationName: "vehicleCreatedBy",
+    }),
+    updatedByUser: one(authUsers, {
+        fields: [vehicles.updatedBy],
+        references: [authUsers.id],
+        relationName: "vehicleUpdatedBy",
+    }),
+}));
+
+export const driverRouteLogsRelations = relations(driverRouteLogs, ({ one }) => ({
+    organization: one(organizations, {
+        fields: [driverRouteLogs.organizationId],
+        references: [organizations.id],
+    }),
+    vehicle: one(vehicles, {
+        fields: [driverRouteLogs.vehicleId],
+        references: [vehicles.id],
+    }),
+    employee: one(employees, {
+        fields: [driverRouteLogs.employeeId],
+        references: [employees.id],
+    }),
 }));
 
 export const projectsRelations = relations(projects, ({ one, many }) => ({
