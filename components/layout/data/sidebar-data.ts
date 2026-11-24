@@ -13,6 +13,7 @@ import {
   Shield,
   IdCard,
   FolderKanban,
+  Route,
   Truck,
 } from 'lucide-react'
 import { type SidebarData } from '../types'
@@ -52,16 +53,27 @@ export const sidebarData: SidebarData = {
           icon: LayoutDashboard,
         },
         {
-          code: PERMISSIONS.EMPLOYEES,
-          title: 'Employees',
-          url: '/employees',
-          icon: IdCard,
-        },
-        {
           code: PERMISSIONS.PROJECTS,
           title: 'Projects',
           url: '/projects',
           icon: FolderKanban,
+        },
+        {
+          code: PERMISSIONS.DRIVER_ROUTE_LOGS,
+          title: 'Driver route logs',
+          url: '/driver-route-logs',
+          icon: Route,
+        },
+      ],
+    },
+    {
+      title: 'Master Data',
+      items: [
+        {
+          code: PERMISSIONS.EMPLOYEES,
+          title: 'Employees',
+          url: '/employees',
+          icon: IdCard,
         },
         {
           code: PERMISSIONS.VEHICLES,

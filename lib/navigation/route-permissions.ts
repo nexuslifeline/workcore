@@ -14,6 +14,7 @@ const ROUTE_PERMISSION_MAP: RouteRule[] = [
   { path: '/employees', code: PERMISSIONS.EMPLOYEES },
   { path: '/projects', code: PERMISSIONS.PROJECTS },
   { path: '/vehicles', code: PERMISSIONS.VEHICLES },
+  { path: '/driver-route-logs', code: PERMISSIONS.DRIVER_ROUTE_LOGS },
   { path: '/users', code: PERMISSIONS.SYSTEM_USERS },
   { path: '/roles', code: PERMISSIONS.SYSTEM_ROLES },
   { path: '/organizations', code: PERMISSIONS.SYSTEM_ORGANIZATIONS },

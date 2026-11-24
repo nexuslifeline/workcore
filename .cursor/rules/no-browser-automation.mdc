@@ -1,0 +1,15 @@
+---
+description: Do not use Cursor browser automation in this repository
+alwaysApply: true
+---
+
+# No browser automation
+
+Do not use Cursor's built-in browser in this repository. This overrides the general instruction to verify web UI changes in the browser.
+
+- Do not call `cursor-ide-browser` tools: navigate, snapshot, click, type, fill, screenshot, lock, scroll, or CDP.
+- Do not open localhost or app URLs in the embedded browser to check UI.
+
+For UI, layout, or rendered-data changes, verify from the code, types, tests, or the dev-server log. Say that the browser was not used.
+
+Desktop computer-use stays available.
